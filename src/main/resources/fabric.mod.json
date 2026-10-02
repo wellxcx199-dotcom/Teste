@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "climamod",
+  "version": "${version}",
+  "name": "Clima Realista",
+  "description": "Simulação climática: temperatura, pressão, vento, umidade, nuvens e precipitação. Funciona só no servidor; com o mod também no cliente, cada jogador vê o clima local e nuvens 3D.",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["br.climate.mod.ClimateMod"],
+    "client": ["br.climate.client.ClimateClient"]
+  },
+  "mixins": [
+    { "config": "climamod.client.mixins.json", "environment": "client" }
+  ],
+  "depends": {
+    "fabricloader": ">=0.16",
+    "fabric-api": "*",
+    "minecraft": "1.21.1",
+    "java": ">=21"
+  }
+}

@@ -25,7 +25,7 @@ public final class Demo2 {
         }
         for (int k = 0; k < g.nx * g.nz; k++) {
             cnt.merge(g.type[k], 1, Integer::sum);
-            if (g.type[k] == CloudType.CUMULONIMBUS && g.precipRate[k] > 0.3) thunder++;
+            if (g.isThunder(k)) thunder++;
         }
         System.out.println("VERÃO ~20°N  Tmax=" + String.format("%.1f", tmax) + "  nuvens=" + cnt + "  células com trovoada=" + thunder);
 

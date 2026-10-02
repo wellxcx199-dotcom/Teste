@@ -111,7 +111,7 @@ public final class ClimateGrid {
 
     // ---------- Janela móvel ----------
 
-    private double[] remap(double[] f, int sx, int sz, boolean[] fresh) {
+    private double[] remap(double[] f, int sx, int sz) {
         double[] o = new double[f.length];
         for (int j = 0; j < nz; j++)
             for (int i = 0; i < nx; i++) {
@@ -137,7 +137,7 @@ public final class ClimateGrid {
                 fresh[j * nx + i] = !(a >= 0 && b >= 0 && a < nx && b < nz);
             }
         double[][] all = {elev, wet, temp, pSea, e, cloud, u, v, wOro, wDiv, wTh, w, pTend, precipRate, precipTotal};
-        for (double[] f : all) System.arraycopy(remap(f, sx, sz, fresh), 0, f, 0, n);
+        for (double[] f : all) System.arraycopy(remap(f, sx, sz), 0, f, 0, n);
         boolean[] ow = water.clone();
         CloudType[] ot = type.clone();
         for (int j = 0; j < nz; j++)
@@ -368,9 +368,10 @@ public final class ClimateGrid {
                 double ev = Math.min(cloud[k], (esL - eL) * 0.5 * kc);   // subsidência seca a nuvem
                 cloud[k] -= ev; e[k] += ev;
             }
-            // Saturação direta no solo (neblina de radiação/advecção)
+            // Saturação direta no solo (neblina de radiação/advecção): o excesso condensa
+            // todo de uma vez, senão a umidade relativa ficaria acima de 100%.
             if (e[k] > es) {
-                double exc = (e[k] - es) * kc;
+                double exc = e[k] - es;
                 e[k] -= exc; cloud[k] += exc;
             }
             // Precipitação
@@ -404,9 +405,7 @@ public final class ClimateGrid {
     // ---------- Consulta ----------
 
     public ClimateSample sample(double worldBlockX, double worldBlockZ, double surfaceElevM) {
-        int i = (int) clamp(Math.floor(worldBlockX / cfg.cellBlocks) - originCellX, 0, nx - 1);
-        int j = (int) clamp(Math.floor(worldBlockZ / cfg.cellBlocks) - originCellZ, 0, nz - 1);
-        int k = j * nx + i;
+        int k = cellIndex(worldBlockX, worldBlockZ), j = k / nx;
         double tLocal = temp[k] + lapse(elev[k]) - lapse(Math.max(0, surfaceElevM));
         double p = pressureAtAltitude(pSea[k], Math.max(0, surfaceElevM));
         double es = satPressure(tLocal);
@@ -415,6 +414,89 @@ public final class ClimateGrid {
         return new ClimateSample(tLocal, p, clamp(e[k] / es, 0, 1), u[k], v[k], spd,
                 dew, cloudBase(tLocal, dew), cloud[k], type[k] == null ? CloudType.CLEAR : type[k],
                 precipRate[k], tLocal < 0.5, cont[k], latitudeDeg(j),
-                type[k] == CloudType.CUMULONIMBUS && precipRate[k] > 0.3);
+                isThunder(k));
+    }
+
+    /** Índice da célula que contém o bloco (x, z), limitado às bordas da janela. */
+    public int cellIndex(double worldBlockX, double worldBlockZ) {
+        int i = (int) clamp(Math.floor(worldBlockX / cfg.cellBlocks) - originCellX, 0, nx - 1);
+        int j = (int) clamp(Math.floor(worldBlockZ / cfg.cellBlocks) - originCellZ, 0, nz - 1);
+        return j * nx + i;
+    }
+
+    /** Verdadeiro se o bloco (x, z) está dentro da janela simulada. */
+    public boolean contains(double worldBlockX, double worldBlockZ) {
+        int i = (int) Math.floor(worldBlockX / cfg.cellBlocks) - originCellX;
+        int j = (int) Math.floor(worldBlockZ / cfg.cellBlocks) - originCellZ;
+        return i >= 0 && j >= 0 && i < nx && j < nz;
+    }
+
+    /** Trovoada: cumulonimbo maduro, já com chuva intensa. */
+    public boolean isThunder(int k) {
+        return type[k] == CloudType.CUMULONIMBUS && precipRate[k] > cfg.thunderMinMmH;
+    }
+
+    // ---------- Geometria das nuvens (para renderização) ----------
+
+    /** Fração do céu coberta (0 a 1), a partir da água de nuvem. */
+    public double coverage(int k) {
+        CloudType t = type[k];
+        if (t == null || t == CloudType.CLEAR) return 0;
+        if (t == CloudType.CIRRUS) return 0.35;
+        return clamp(cloud[k] / 0.6, 0.15, 1);
+    }
+
+    /** Altitude da base da nuvem, em metros acima do nível do mar. */
+    public double cloudBaseMeters(int k) {
+        CloudType t = type[k];
+        if (t == null || t == CloudType.CLEAR) return 0;
+        double lcl = cloudBase(temp[k], dewPoint(e[k]));                 // nível de condensação
+        double base = switch (t) {
+            case FOG -> 0;
+            case CIRRUS -> 8000;
+            case STRATUS -> clamp(lcl, 150, 1500);
+            case NIMBOSTRATUS -> clamp(lcl, 300, 2000);
+            default -> clamp(lcl, 400, 2500);                             // cúmulos e cumulonimbos
+        };
+        return elev[k] + base;
+    }
+
+    /** Altitude do topo da nuvem, em metros acima do nível do mar. */
+    public double cloudTopMeters(int k) {
+        CloudType t = type[k];
+        if (t == null || t == CloudType.CLEAR) return 0;
+        double base = cloudBaseMeters(k), c = coverage(k);
+        return switch (t) {
+            case FOG -> elev[k] + 80;
+            case CIRRUS -> base + 400;
+            case STRATUS -> base + 300 + 400 * c;
+            case NIMBOSTRATUS -> base + 2500 + 1500 * c;
+            case CUMULUS -> base + 600 + 1800 * c;
+            case CUMULONIMBUS -> Math.max(base + 6000, 11000);           // topo na tropopausa
+            default -> base;
+        };
+    }
+
+    // ---------- Persistência ----------
+
+    /**
+     * Campos que definem o estado e precisam ser salvos (temperatura, pressão, vapor,
+     * nuvem, vento e chuva acumulada). Retorna as próprias matrizes da grade: quem
+     * restaura um estado salvo escreve nelas e depois chama {@link #refreshDiagnostics}.
+     */
+    public double[][] persistentFields() {
+        return new double[][] {temp, pSea, e, cloud, u, v, precipTotal};
+    }
+
+    /** Nomes estáveis dos campos de {@link #persistentFields()}, na mesma ordem. */
+    public static final String[] PERSISTENT_NAMES = {"temp", "pSea", "e", "cloud", "u", "v", "precipTotal"};
+
+    /** Recalcula o que é derivado do estado (movimento vertical, tipo de nuvem) após uma restauração. */
+    public void refreshDiagnostics(double gameHours) {
+        curYr = yearFraction(gameHours);
+        java.util.Arrays.fill(pTend, 0);
+        java.util.Arrays.fill(precipRate, 0);
+        computeVertical();
+        classify();
     }
 }

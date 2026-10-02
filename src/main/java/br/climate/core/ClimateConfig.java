@@ -25,4 +25,6 @@ public final class ClimateConfig {
     public double precipThreshold = 0.5;
     public double landEvapFraction = 0.65;
     public double mmPerUnit = 1.5;
+    /** Trovoada: só cumulonimbos com chuva acima deste limiar (mm/h), os mais maduros. */
+    public double thunderMinMmH = 1.2;
 }
