@@ -1,5 +1,7 @@
 package br.climate.client;
 
+import br.climate.core.CloudType;
+import br.climate.core.Physics;
 import br.climate.mod.ClimatePayload;
 import net.minecraft.util.Mth;
 
@@ -13,18 +15,14 @@ public final class ClientClimate {
 
     /** Após este tempo sem notícias do servidor, o cliente volta ao clima vanilla. */
     private static final long STALE_TICKS = 20 * 60;
-    /** Gradiente de temperatura por bloco de altura: 6,5 °C/km com 15 m por bloco. */
-    private static final double LAPSE_PER_BLOCK = 6.5 * 15 / 1000.0;
 
     private static ClimatePayload latest;
-    private static double playerY;
     private static long ticksSince = Long.MAX_VALUE;
 
     private static float rain, rainO, thunder, thunderO, fog, fogO;
 
-    public static void accept(ClimatePayload p, double y) {
+    public static void accept(ClimatePayload p) {
         latest = p;
-        playerY = y;
         ticksSince = 0;
     }
 
@@ -51,7 +49,7 @@ public final class ClientClimate {
         float rainTarget = latest.precipMmH() > 0.1f ? Mth.clamp(0.25f + latest.precipMmH() / 2.5f, 0, 1) : 0;
         rain = approach(rain, rainTarget, 0.01f);
         thunder = approach(thunder, latest.thunder() ? 1 : 0, 0.01f);
-        fog = approach(fog, latest.fog() ? 1 : 0, 0.005f);
+        fog = approach(fog, latest.cloudType() == CloudType.FOG.ordinal() ? 1 : 0, 0.005f);
     }
 
     private static float approach(float v, float target, float step) {
@@ -66,6 +64,6 @@ public final class ClientClimate {
 
     /** Neve ou chuva numa altura Y, a partir da temperatura medida na altura do jogador. */
     public static boolean snowAt(int y) {
-        return latest.tempC() - (y - playerY) * LAPSE_PER_BLOCK < 0.5;
+        return latest.tempC() - (y - latest.refY()) * latest.lapsePerBlock() < Physics.SNOW_BELOW_C;
     }
 }

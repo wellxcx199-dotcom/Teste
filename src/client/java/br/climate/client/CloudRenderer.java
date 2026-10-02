@@ -11,12 +11,18 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.minecraft.client.CloudStatus;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
+
+import java.util.Arrays;
 
 /**
  * Desenha as nuvens simuladas como blocos translúcidos, no estilo das nuvens "fancy" do
@@ -33,6 +39,8 @@ public final class CloudRenderer {
         if (!ClientClimate.active()) return;
         ClientLevel level = ctx.world();
         if (level == null || level.dimension() != Level.OVERWORLD) return;
+        // Respeita a opção de vídeo "Nuvens: Desligadas".
+        if (Minecraft.getInstance().options.getCloudsType() == CloudStatus.OFF) return;
         ClimatePayload p = ClientClimate.latest();
 
         Vec3 cam = ctx.camera().getPosition();
@@ -50,22 +58,41 @@ public final class CloudRenderer {
 
         int size = p.size(), cb = p.cellBlocks();
         double radius = (size / 2.0) * cb;
+        Frustum frustum = ctx.frustum();
+        // Translúcidos precisam ser desenhados do mais longe para o mais perto; senão uma
+        // nuvem próxima, desenhada antes, apaga a de trás. Chave = distância² e índice.
+        long[] order = new long[size * size];
+        int count = 0;
         for (int j = 0; j < size; j++)
             for (int i = 0; i < size; i++) {
                 int idx = j * size + i;
                 CloudType type = TYPES[p.types()[idx]];
                 if (type == CloudType.CLEAR || type == CloudType.FOG) continue; // neblina é feita pelo FogRenderer
                 double x0 = p.originX() + i * cb + offX, z0 = p.originZ() + j * cb + offZ;
-                double dist = Math.hypot(x0 + cb / 2.0 - cam.x, z0 + cb / 2.0 - cam.z);
-                float fade = (float) Math.min(1, Math.max(0, (radius - dist) / (0.25 * radius)));
-                if (fade <= 0) continue;
-                float cover = (p.cover()[idx] & 0xFF) / 255f;
-                // Perspectiva aérea: quanto mais longe, mais a nuvem se confunde com o horizonte.
-                double dy = p.baseY()[idx] - cam.y;
-                float haze = (float) Math.pow(Math.min(1, Math.sqrt(dist * dist + dy * dy) / (radius * 1.1)), 1.5) * 0.85f;
-                int cellX = Math.floorDiv(p.originX(), cb) + i, cellZ = Math.floorDiv(p.originZ(), cb) + j;
-                cell(bb, m, type, x0, z0, cb, p.baseY()[idx], p.topY()[idx], cover, fade, tint, fog, haze, cellX, cellZ);
+                double ddx = x0 + cb / 2.0 - cam.x, ddz = z0 + cb / 2.0 - cam.z;
+                if (ddx * ddx + ddz * ddz >= radius * radius) continue;
+                double grow = cb * 0.45;                                       // bigorna passa da célula
+                if (frustum != null && !frustum.isVisible(new AABB(x0 - grow, p.baseY()[idx], z0 - grow,
+                        x0 + cb + grow, p.topY()[idx], z0 + cb + grow))) continue;
+                double dy = (p.baseY()[idx] + p.topY()[idx]) / 2.0 - cam.y;
+                float d2 = (float) (ddx * ddx + ddz * ddz + dy * dy);
+                order[count++] = ((long) Float.floatToIntBits(d2) << 32) | idx;
             }
+        Arrays.sort(order, 0, count);
+
+        for (int q = count - 1; q >= 0; q--) {
+            int idx = (int) order[q], i = idx % size, j = idx / size;
+            CloudType type = TYPES[p.types()[idx]];
+            double x0 = p.originX() + i * cb + offX, z0 = p.originZ() + j * cb + offZ;
+            double dist = Math.hypot(x0 + cb / 2.0 - cam.x, z0 + cb / 2.0 - cam.z);
+            float fade = (float) Math.min(1, Math.max(0, (radius - dist) / (0.25 * radius)));
+            float cover = (p.cover()[idx] & 0xFF) / 255f;
+            // Perspectiva aérea: quanto mais longe, mais a nuvem se confunde com o horizonte.
+            double dy = p.baseY()[idx] - cam.y;
+            float haze = (float) Math.pow(Math.min(1, Math.sqrt(dist * dist + dy * dy) / (radius * 1.1)), 1.5) * 0.85f;
+            int cellX = Math.floorDiv(p.originX(), cb) + i, cellZ = Math.floorDiv(p.originZ(), cb) + j;
+            cell(bb, m, type, x0, z0, cb, p.baseY()[idx], p.topY()[idx], cover, fade, tint, fog, haze, cellX, cellZ);
+        }
 
         MeshData mesh = bb.build();
         if (mesh != null) {

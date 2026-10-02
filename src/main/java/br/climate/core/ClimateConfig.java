@@ -14,6 +14,21 @@ public final class ClimateConfig {
     public double daysPerYear = 24;
     /** Distância em células até o oceano em que a continentalidade satura em 1. */
     public double continentalityCells = 40;
+    /** Água conta como oceano (para a continentalidade) se esta fração do entorno for água... */
+    public double oceanMinFraction = 0.6;
+    /** ...num quadrado de raio (em células) igual a este. */
+    public int oceanRadiusCells = 3;
+    /** Atrito com a superfície (1/s) sobre o mar e sobre a terra: desacelera e desvia o vento. */
+    public double frictionSea = 4e-5;
+    public double frictionLand = 8e-5;
+    /** Queda de pressão (hPa) por °C de ar mais quente que o normal (baixa térmica). */
+    public double thermalLowHPaPerC = 0.8;
+    /** Passadas de suavização da anomalia de temperatura (cada uma alarga ~1 célula). */
+    public int anomalySmoothPasses = 3;
+    /** Brisa: espessura da camada de ar frio (m), distância em que o contraste age (m) e teto (m/s). */
+    public double breezeDepthM = 500;
+    public double breezeLengthM = 20000;
+    public double maxBreeze = 10;
     /** Multiplicador da velocidade de transporte pelo vento (1 = físico). */
     public double windSpeedFactor = 0.35;
     public double maxWind = 25;

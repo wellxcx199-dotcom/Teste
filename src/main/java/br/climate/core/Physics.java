@@ -9,6 +9,9 @@ public final class Physics {
     public static final double SCALE_HEIGHT = 8400;  // m, altura de escala da pressão
     public static final double OMEGA = 7.292e-5;     // rad/s, rotação da Terra
     public static final double RHO = 1.2;            // kg/m³, densidade do ar junto ao solo
+    public static final double G = 9.81;             // m/s², gravidade
+    /** Abaixo desta temperatura (°C) a precipitação chega ao solo como neve. */
+    public static final double SNOW_BELOW_C = 0.5;
 
     /** Pressão de saturação do vapor (hPa) pela fórmula de Magnus, T em °C. */
     public static double satPressure(double tC) {

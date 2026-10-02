@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "br.climate.mod.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "BiomeClimateMixin",
+    "ServerLevelPrecipitationMixin"
+  ],
+  "injectors": { "defaultRequire": 1 }
+}

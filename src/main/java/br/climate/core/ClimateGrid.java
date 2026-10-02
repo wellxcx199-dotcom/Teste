@@ -26,6 +26,8 @@ public final class ClimateGrid {
     public final double[] temp, pSea, e, cloud, u, v;
     // Diagnósticos
     public final double[] wOro, wDiv, wTh, w, pTend, precipRate, precipTotal;
+    /** Anomalia de temperatura suavizada (°C), que gera as baixas térmicas e as brisas. */
+    public final double[] anom;
     public final CloudType[] type;
 
     private final double[] tmpA, tmpB;
@@ -44,6 +46,7 @@ public final class ClimateGrid {
         u = new double[n]; v = new double[n];
         wOro = new double[n]; wDiv = new double[n]; wTh = new double[n]; w = new double[n];
         pTend = new double[n]; precipRate = new double[n]; precipTotal = new double[n];
+        anom = new double[n];
         type = new CloudType[n];
         tmpA = new double[n]; tmpB = new double[n];
 
@@ -56,6 +59,58 @@ public final class ClimateGrid {
                 wet[k] = clamp(terrain.wetness(cx, cz), 0, 1);
             }
         computeContinentality();
+    }
+
+    /** Cópia independente (para previsões): mesmo terreno e mesmo estado, matrizes próprias. */
+    private ClimateGrid(ClimateGrid o) {
+        nx = o.nx; nz = o.nz; originCellX = o.originCellX; originCellZ = o.originCellZ;
+        terrain = o.terrain; cfg = o.cfg; dx = o.dx; curYr = o.curYr;
+        elev = o.elev.clone(); wet = o.wet.clone(); cont = o.cont.clone(); water = o.water.clone();
+        temp = o.temp.clone(); pSea = o.pSea.clone(); e = o.e.clone(); cloud = o.cloud.clone();
+        u = o.u.clone(); v = o.v.clone();
+        wOro = o.wOro.clone(); wDiv = o.wDiv.clone(); wTh = o.wTh.clone(); w = o.w.clone();
+        pTend = o.pTend.clone(); precipRate = o.precipRate.clone(); precipTotal = o.precipTotal.clone();
+        anom = o.anom.clone();
+        type = o.type.clone();
+        tmpA = new double[o.tmpA.length]; tmpB = new double[o.tmpB.length];
+    }
+
+    public ClimateGrid copy() { return new ClimateGrid(this); }
+
+    /**
+     * Previsão do tempo num ponto: roda uma cópia da grade adiante e anota o clima a cada
+     * {@code everyHours}. O modelo é determinístico, então, sem perturbações, a "previsão"
+     * acertaria tudo. Para imitar a incerteza real, a temperatura inicial da cópia recebe um
+     * ruído pequeno que cresce com o tempo, como nos modelos de previsão por conjunto.
+     *
+     * @param seed semente do ruído; a mesma semente dá a mesma previsão
+     */
+    public java.util.List<ClimateSample> forecast(double worldBlockX, double worldBlockZ, double surfaceElevM,
+                                                  double gameHours, int hours, int everyHours, long seed) {
+        ClimateGrid f = copy();
+        java.util.Random rnd = new java.util.Random(seed);
+        // Perturbação suave: ruído numa grade grossa (a cada 8 células), interpolado. Ruído
+        // independente por célula criaria degraus de temperatura e, com eles, ventos falsos.
+        int gx = nx / 8 + 2, gz = nz / 8 + 2;
+        double[] coarse = new double[gx * gz];
+        for (int q = 0; q < coarse.length; q++) coarse[q] = rnd.nextGaussian() * 0.6;
+        double[] noise = new double[nx * nz];
+        for (int j = 0; j < nz; j++)
+            for (int i = 0; i < nx; i++) {
+                double fx = i / 8.0, fz = j / 8.0;
+                int x0 = (int) fx, z0 = (int) fz;
+                double tx = fx - x0, tz = fz - z0;
+                noise[j * nx + i] = lerp(lerp(coarse[z0 * gx + x0], coarse[z0 * gx + x0 + 1], tx),
+                                         lerp(coarse[(z0 + 1) * gx + x0], coarse[(z0 + 1) * gx + x0 + 1], tx), tz);
+            }
+        java.util.List<ClimateSample> out = new java.util.ArrayList<>();
+        double h = gameHours;
+        for (int step = 1; step <= hours; step++, h++) {
+            if (step % 6 == 1) for (int k = 0; k < nx * nz; k++) f.temp[k] += noise[k];
+            f.step(1, h + 1);
+            if (step % everyHours == 0) out.add(f.sample(worldBlockX, worldBlockZ, surfaceElevM));
+        }
+        return out;
     }
 
     // ---------- Geometria ----------
@@ -73,7 +128,8 @@ public final class ClimateGrid {
         int[] dist = new int[n];
         java.util.Arrays.fill(dist, Integer.MAX_VALUE);
         ArrayDeque<Integer> q = new ArrayDeque<>();
-        for (int k = 0; k < n; k++) if (water[k]) { dist[k] = 0; q.add(k); }
+        boolean[] ocean = oceanMask();
+        for (int k = 0; k < n; k++) if (ocean[k]) { dist[k] = 0; q.add(k); }
         int[] di = {1, -1, 0, 0}, dj = {0, 0, 1, -1};
         while (!q.isEmpty()) {
             int k = q.poll(); int i = k % nx, j = k / nx;
@@ -89,6 +145,28 @@ public final class ClimateGrid {
             double d = dist[k] == Integer.MAX_VALUE ? cfg.continentalityCells : dist[k];
             cont[k] = clamp(d / cfg.continentalityCells, 0, 1);
         }
+    }
+
+    /**
+     * Células de "oceano" para a continentalidade: água cercada de bastante água. Rios e
+     * lagos pequenos (muito comuns no Minecraft) ficam de fora; eles têm a própria inércia
+     * térmica como células de água, mas não tornam toda a região "marítima".
+     */
+    private boolean[] oceanMask() {
+        int n = nx * nz, r = cfg.oceanRadiusCells;
+        boolean[] ocean = new boolean[n];
+        for (int j = 0; j < nz; j++)
+            for (int i = 0; i < nx; i++) {
+                if (!water[j * nx + i]) continue;
+                int wc = 0, c = 0;
+                for (int b = Math.max(0, j - r); b <= Math.min(nz - 1, j + r); b++)
+                    for (int a = Math.max(0, i - r); a <= Math.min(nx - 1, i + r); a++) {
+                        c++;
+                        if (water[b * nx + a]) wc++;
+                    }
+                ocean[j * nx + i] = wc >= cfg.oceanMinFraction * c;
+            }
+        return ocean;
     }
 
     // ---------- Inicialização ----------
@@ -257,17 +335,37 @@ public final class ClimateGrid {
         System.arraycopy(pSea, 0, prev, 0, n);
         double[] t0 = tmpB;
         for (int k = 0; k < n; k++) t0[k] = temp[k] + lapse(elev[k]);
+        // Anomalia de temperatura (ar mais quente ou mais frio que o normal para a latitude),
+        // suavizada na escala das brisas (dezenas de km): é ela que move a brisa térmica.
         for (int j = 0; j < nz; j++) {
-            double lat = latitudeDeg(j);
-            double mean = refTemp(lat);
-            double hadley = -8.0 * Math.cos(Math.toRadians(6 * lat)); // baixas no equador e 60°, altas em 30° e polos
+            double mean = refTemp(latitudeDeg(j));
+            for (int i = 0; i < nx; i++) anom[j * nx + i] = t0[j * nx + i] - mean;
+        }
+        for (int q = 0; q < cfg.anomalySmoothPasses; q++) smooth(anom);
+        for (int j = 0; j < nz; j++) {
+            double hadley = hadleyHPa(latitudeDeg(j));
             for (int i = 0; i < nx; i++) {
                 int k = j * nx + i;
-                pSea[k] = 1013.25 + hadley - 0.8 * (t0[k] - mean);   // ar quente -> baixa pressão
+                pSea[k] = 1013.25 + hadley - cfg.thermalLowHPaPerC * anom[k];   // ar quente -> baixa pressão
             }
         }
         smooth(pSea); smooth(pSea);
         for (int k = 0; k < n; k++) pTend[k] = (pSea[k] - prev[k]) / dt;
+    }
+
+    /** Faixas de pressão da circulação geral: baixas no equador e em 60°, altas em 30° e nos polos. */
+    private static double hadleyHPa(double lat) {
+        return -8.0 * Math.cos(Math.toRadians(6 * lat));
+    }
+
+    /** Gradiente norte-sul (Pa/m, positivo se a pressão cresce para o norte) das faixas de Hadley. */
+    private double hadleyGradient(int j) {
+        double worldZ = (originCellZ + j + 0.5) * cfg.cellBlocks;
+        if (Math.abs(worldZ) >= cfg.halfRangeBlocks) return 0;                 // além do polo
+        double lat = latitudeDeg(j);
+        double dPdLat = 8.0 * 6 * Math.sin(Math.toRadians(6 * lat)) * Math.PI / 180;  // hPa por grau
+        double degPerMeter = 90.0 / (cfg.halfRangeBlocks * cfg.metersPerBlockH());
+        return dPdLat * degPerMeter * 100.0;
     }
 
     /** Temperatura de referência (nível do mar) por latitude e estação, independente da janela. */
@@ -295,23 +393,42 @@ public final class ClimateGrid {
 
     // ---------- Vento ----------
 
+    /**
+     * O vento é a soma de duas partes.
+     *
+     * Circulação geral: equilíbrio entre gradiente de pressão (faixas de Hadley), força de
+     * Coriolis (f) e atrito com a superfície (k). A solução estacionária de
+     *   -f v = -(1/ρ) ∂p/∂x - k u      e      f u = -(1/ρ) ∂p/∂y - k v
+     * vale em qualquer latitude: longe do equador (f >> k) dá o vento geostrófico, desviado
+     * pelo atrito em direção à baixa pressão; no equador (f = 0) o ar vai direto da alta para
+     * a baixa. Daí saem os alísios, os ventos de oeste e as calmarias de 30° e 60°.
+     *
+     * Brisa térmica: em escalas de poucos km o equilíbrio geostrófico não vale. O ar frio
+     * avança sob o quente como uma corrente de gravidade, com velocidade
+     *   c ≈ 0,6 √(g h ΔT / T),
+     * na direção do ar mais quente (brisa marítima de dia, terral à noite).
+     */
     private void computeWind(boolean snap) {
         for (int j = 0; j < nz; j++) {
-            double lat = latitudeDeg(j);
-            double sinLat = Math.sin(Math.toRadians(lat));
-            if (Math.abs(sinLat) < 0.25) sinLat = Math.copySign(0.25, sinLat);
-            double f = 2 * OMEGA * sinLat;
+            double f = 2 * OMEGA * Math.sin(Math.toRadians(latitudeDeg(j)));
+            double dpdy = hadleyGradient(j);
             for (int i = 0; i < nx; i++) {
                 int k = j * nx + i;
+                double kf = water[k] ? cfg.frictionSea : cfg.frictionLand;
+                double den = RHO * (kf * kf + f * f);
+                double un = -(f * dpdy) / den, vn = -(kf * dpdy) / den;
+
                 int i0 = Math.max(i - 1, 0), i1 = Math.min(i + 1, nx - 1);
                 int j0 = Math.max(j - 1, 0), j1 = Math.min(j + 1, nz - 1);
-                double dpdx = (pSea[j * nx + i1] - pSea[j * nx + i0]) / ((i1 - i0) * dx) * 100.0; // Pa/m
-                double dpdy = -(pSea[j1 * nx + i] - pSea[j0 * nx + i]) / ((j1 - j0) * dx) * 100.0; // norte
-                double ug = -dpdy / (RHO * f), vg = dpdx / (RHO * f); // vento geostrófico
-                double ang = Math.toRadians(water[k] ? 15 : 30) * Math.signum(sinLat); // atrito desvia p/ baixa pressão
-                double fr = water[k] ? 0.8 : 0.6;
-                double un = fr * (ug * Math.cos(ang) - vg * Math.sin(ang));
-                double vn = fr * (ug * Math.sin(ang) + vg * Math.cos(ang));
+                double gx = (anom[j * nx + i1] - anom[j * nx + i0]) / ((i1 - i0) * dx);       // °C/m, leste
+                double gy = -(anom[j1 * nx + i] - anom[j0 * nx + i]) / ((j1 - j0) * dx);      // °C/m, norte
+                double gm = Math.hypot(gx, gy);
+                if (gm > 0) {
+                    double dT = gm * cfg.breezeLengthM;
+                    double c = Math.min(cfg.maxBreeze, 0.6 * Math.sqrt(G * cfg.breezeDepthM * dT / (273.15 + temp[k])));
+                    un += c * gx / gm;
+                    vn += c * gy / gm;
+                }
                 double sp = Math.hypot(un, vn);
                 if (sp > cfg.maxWind) { un *= cfg.maxWind / sp; vn *= cfg.maxWind / sp; }
                 if (snap) { u[k] = un; v[k] = vn; }
@@ -394,7 +511,9 @@ public final class ClimateGrid {
         double base = cloudBase(t, dewPoint(e[k]));
         double c = cloud[k], spd = Math.hypot(u[k], v[k]);
         if (base < 60 && spd < 3 && (rh > 0.97 || c > 0.05)) return CloudType.FOG;
-        if (c > 0.4 && wTh[k] > 0.2 && t > 15) return CloudType.CUMULONIMBUS; // convecção profunda
+        // Convecção profunda: corrente ascendente com muita água condensada. Nos trópicos o
+        // combustível é sobretudo a umidade, então não se exige um grande excesso de calor.
+        if (c > 0.4 && wTh[k] > 0.12 && t > 15) return CloudType.CUMULONIMBUS;
         if (c > 0.05 && wTh[k] > 0.1) return CloudType.CUMULUS;              // convecção rasa
         if (c > 0.6) return CloudType.NIMBOSTRATUS;                            // ascensão lenta e ampla
         if (c > 0.08) return CloudType.STRATUS;
@@ -413,7 +532,7 @@ public final class ClimateGrid {
         double spd = Math.hypot(u[k], v[k]);
         return new ClimateSample(tLocal, p, clamp(e[k] / es, 0, 1), u[k], v[k], spd,
                 dew, cloudBase(tLocal, dew), cloud[k], type[k] == null ? CloudType.CLEAR : type[k],
-                precipRate[k], tLocal < 0.5, cont[k], latitudeDeg(j),
+                precipRate[k], tLocal < SNOW_BELOW_C, cont[k], latitudeDeg(j),
                 isThunder(k));
     }
 
