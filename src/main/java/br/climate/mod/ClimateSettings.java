@@ -39,6 +39,12 @@ public final class ClimateSettings {
         /** Neve e gelo de lagos derretem quando a temperatura simulada passa de meltAboveC. */
         public boolean meltSnow = true;
         public double meltAboveC = 2.0;
+        /** Tornados empurram e levantam jogadores, mobs e itens. */
+        public boolean tornadoPushesEntities = true;
+        /** Tornados arrancam folhas, plantas e neve (só blocos naturais e leves). */
+        public boolean tornadoBreaksBlocks = true;
+        /** Ventos muito fortes (furacões) empurram jogadores a céu aberto. */
+        public boolean strongWindPushesPlayers = true;
     }
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();

@@ -20,22 +20,31 @@ public final class ClimateHud {
     private ClimateHud() {}
 
     private static final CloudType[] TYPES = CloudType.values();
-    private static KeyMapping toggleKey;
+    private static KeyMapping toggleKey, mapKey;
     private static boolean visible = true;
 
     static void register() {
         toggleKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.climamod.hud", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_K, "key.categories.climamod"));
+        mapKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                "key.climamod.map", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_M, "key.categories.climamod"));
     }
 
     static void tick() {
         while (toggleKey.consumeClick()) visible = !visible;
+        while (mapKey.consumeClick()) {
+            Minecraft mc = Minecraft.getInstance();
+            if (ClientClimate.active()) mc.setScreen(new ClimateMapScreen());
+            else if (mc.player != null)
+                mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                        "Radar indisponível: o servidor não tem o mod ou você não está na Superfície."), true);
+        }
     }
 
     static void render(GuiGraphics g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
         if (!visible || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()) return;
-        if (mc.level == null || mc.level.dimension() != Level.OVERWORLD || !ClientClimate.active()) return;
+        if (mc.level == null || mc.player == null || mc.level.dimension() != Level.OVERWORLD || !ClientClimate.active()) return;
         ClimatePayload p = ClientClimate.latest();
 
         List<String> lines = new ArrayList<>();
@@ -48,6 +57,18 @@ public final class ClimateHud {
         else if (p.precipMmH() > 0.1)
             sky += String.format(" · %s %.1f mm/h", ClientClimate.snowAt((int) p.refY()) ? "neve" : "chuva", p.precipMmH());
         lines.add(sky);
+        // Aviso do fenômeno mais próximo (até 1500 blocos).
+        br.climate.mod.StormInfo near = null;
+        double best = 1500;
+        for (br.climate.mod.StormInfo s : p.storms()) {
+            double d = Math.hypot(s.x() - mc.player.getX(), s.z() - mc.player.getZ());
+            if (d < best) { best = d; near = s; }
+        }
+        if (near != null) {
+            double dx = near.x() - mc.player.getX(), dz = near.z() - mc.player.getZ();
+            String dir = compass((Math.toDegrees(Math.atan2(dx, -dz)) + 360) % 360);
+            lines.add(String.format("⚠ %s a %.0f blocos (%s)", near.describe(), best, dir));
+        }
 
         Font font = mc.font;
         int w = 0;
@@ -55,7 +76,7 @@ public final class ClimateHud {
         int x = 4, y = 4, lh = font.lineHeight + 1;
         g.fill(x - 2, y - 2, x + w + 2, y + lines.size() * lh, 0x80000000);
         for (String s : lines) {
-            g.drawString(font, s, x, y, 0xFFFFFF, false);
+            g.drawString(font, s, x, y, s.startsWith("⚠") ? 0xFF6060 : 0xFFFFFF, false);
             y += lh;
         }
     }

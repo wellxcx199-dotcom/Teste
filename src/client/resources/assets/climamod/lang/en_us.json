@@ -1,4 +1,5 @@
 {
   "key.categories.climamod": "Clima Realista",
-  "key.climamod.hud": "Show/hide weather panel"
+  "key.climamod.hud": "Show/hide weather panel",
+  "key.climamod.map": "Open weather radar map"
 }

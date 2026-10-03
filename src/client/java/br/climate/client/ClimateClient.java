@@ -13,14 +13,16 @@ public final class ClimateClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ClientPlayNetworking.registerGlobalReceiver(ClimatePayload.TYPE, (payload, ctx) -> ClientClimate.accept(payload));
+        ClientPlayNetworking.registerGlobalReceiver(br.climate.mod.MapPayload.TYPE, (payload, ctx) -> ClientClimate.setMap(payload));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientClimate.reset());
         ClimateHud.register();
         ClimateShowcase.register();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ClimateHud.tick();
-            if (client.level != null && !client.isPaused()) ClientClimate.tick();
+            if (client.level != null && !client.isPaused()) { ClientClimate.tick(); TornadoRenderer.tick(client); }
         });
         WorldRenderEvents.AFTER_TRANSLUCENT.register(CloudRenderer::render);
+        WorldRenderEvents.AFTER_TRANSLUCENT.register(TornadoRenderer::render);
         HudRenderCallback.EVENT.register(ClimateHud::render);
     }
 }

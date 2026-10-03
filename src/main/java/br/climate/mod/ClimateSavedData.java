@@ -49,6 +49,16 @@ public final class ClimateSavedData extends SavedData {
             if (bits.length != nx * nz) return null;
             for (int k = 0; k < bits.length; k++) fields[f][k] = Float.intBitsToFloat(bits[k]);
         }
+        // Fenômenos (furacões, supercélulas, tornados): uma lista de números por fenômeno.
+        java.util.List<double[]> storms = new java.util.ArrayList<>();
+        net.minecraft.nbt.ListTag list = t.getList("storms", net.minecraft.nbt.Tag.TAG_LIST);
+        for (int i = 0; i < list.size(); i++) {
+            net.minecraft.nbt.ListTag one = (net.minecraft.nbt.ListTag) list.get(i);
+            double[] d = new double[one.size()];
+            for (int q = 0; q < d.length; q++) d[q] = one.getDouble(q);
+            if (d.length >= 13) storms.add(d);
+        }
+        g.storms.unpack(storms);
         g.refreshDiagnostics(gameHours);
         return g;
     }
@@ -77,6 +87,13 @@ public final class ClimateSavedData extends SavedData {
         tag.putInt("cellBlocks", grid.cfg.cellBlocks);
         tag.putInt("originX", grid.originCellX);
         tag.putInt("originZ", grid.originCellZ);
+        net.minecraft.nbt.ListTag storms = new net.minecraft.nbt.ListTag();
+        for (double[] d : grid.storms.pack()) {
+            net.minecraft.nbt.ListTag one = new net.minecraft.nbt.ListTag();
+            for (double v : d) one.add(net.minecraft.nbt.DoubleTag.valueOf(v));
+            storms.add(one);
+        }
+        tag.put("storms", storms);
         double[][] fields = grid.persistentFields();
         for (int f = 0; f < fields.length; f++) {
             int[] bits = new int[fields[f].length];

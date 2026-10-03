@@ -36,6 +36,7 @@ public final class ClientClimate {
         rain = rainO = thunder = thunderO = fog = fogO = 0;
         insideCloud = false;
         showcase = null;
+        map = null;
     }
 
     public static boolean active() {
@@ -43,6 +44,13 @@ public final class ClientClimate {
     }
 
     public static ClimatePayload latest() { return latest; }
+
+    /** Último mapa do radar recebido (tela da tecla M). */
+    private static br.climate.mod.MapPayload map;
+
+    public static br.climate.mod.MapPayload map() { return map; }
+
+    public static void setMap(br.climate.mod.MapPayload m) { map = m; }
 
     /** Nuvens de demonstração do /climavitrine; quando presentes, substituem as simuladas. */
     private static ClimatePayload showcase;

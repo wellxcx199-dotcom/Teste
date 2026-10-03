@@ -1,4 +1,5 @@
 {
   "key.categories.climamod": "Clima Realista",
-  "key.climamod.hud": "Mostrar/ocultar painel do clima"
+  "key.climamod.hud": "Mostrar/ocultar painel do clima",
+  "key.climamod.map": "Abrir mapa-radar do tempo"
 }

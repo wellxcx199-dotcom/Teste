@@ -53,6 +53,9 @@ public final class ClimateMod implements ModInitializer {
     @Override
     public void onInitialize() {
         PayloadTypeRegistry.playS2C().register(ClimatePayload.TYPE, ClimatePayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(MapPayload.TYPE, MapPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(MapRequestPayload.TYPE, MapRequestPayload.CODEC);
+        ServerPlayNetworking.registerGlobalReceiver(MapRequestPayload.TYPE, (payload, ctx) -> sendMap(ctx.player()));
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             ClimateSettings settings = ClimateSettings.load(
@@ -79,6 +82,7 @@ public final class ClimateMod implements ModInitializer {
             if (cfg == null || level.dimension() != Level.OVERWORLD) return;
             if (grid == null) { createGridWhenReady(level); return; }
             if (opt.meltSnow && level.getGameTime() % 20 == 0) meltSnowAndIce(level);
+            StormEffects.tick(level, grid, cfg, opt);
             if (level.getGameTime() % opt.stepTicks != 0) return;
             followPlayers(level);
             grid.step(opt.stepTicks / 1000.0, gameHours(level)); // 1000 ticks = 1 hora de jogo
@@ -94,7 +98,12 @@ public final class ClimateMod implements ModInitializer {
         CommandRegistrationCallback.EVENT.register((dispatcher, access, env) ->
             dispatcher.register(Commands.literal("clima")
                     .executes(ClimateMod::commandNow)
-                    .then(Commands.literal("previsao").executes(ClimateMod::commandForecast))));
+                    .then(Commands.literal("previsao").executes(ClimateMod::commandForecast))
+                    .then(Commands.literal("fenomenos").executes(ClimateMod::commandStorms))
+                    .then(Commands.literal("fenomeno").requires(src -> src.hasPermission(2))
+                            .then(Commands.literal("furacao").executes(c -> commandSpawn(c, Storm.Kind.HURRICANE)))
+                            .then(Commands.literal("supercelula").executes(c -> commandSpawn(c, Storm.Kind.SUPERCELL)))
+                            .then(Commands.literal("tornado").executes(c -> commandSpawn(c, Storm.Kind.TORNADO))))));
     }
 
     // ---------- Comandos ----------
@@ -157,6 +166,49 @@ public final class ClimateMod implements ModInitializer {
         }
         String txt = sb.toString();
         ctx.getSource().sendSuccess(() -> Component.literal(txt), false);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /** Lista os fenômenos em andamento, com distância e direção a partir do jogador. */
+    private static int commandStorms(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer p = climatePlayer(ctx);
+        if (p == null) return 0;
+        if (grid.storms.storms.isEmpty()) {
+            ctx.getSource().sendSuccess(() -> Component.literal("Nenhum furacão, supercélula ou tornado ativo."), false);
+            return Command.SINGLE_SUCCESS;
+        }
+        StringBuilder sb = new StringBuilder("Fenômenos ativos:");
+        for (Storm s : grid.storms.storms) {
+            double dx = s.x - p.getX(), dz = s.z - p.getZ();
+            double dist = Math.hypot(dx, dz);
+            double bearing = (Math.toDegrees(Math.atan2(dx, -dz)) + 360) % 360;   // 0 = norte
+            sb.append(String.format("%n%s — vento %.0f m/s — %.0f blocos a %s (x %.0f, z %.0f)",
+                    s.describe(), s.vmax, dist, compass(bearing), s.x, s.z));
+        }
+        String txt = sb.toString();
+        ctx.getSource().sendSuccess(() -> Component.literal(txt), false);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /** Cria um fenômeno perto do jogador (para testar e demonstrar). */
+    private static int commandSpawn(CommandContext<CommandSourceStack> ctx, Storm.Kind kind) throws CommandSyntaxException {
+        ServerPlayer p = climatePlayer(ctx);
+        if (p == null) return 0;
+        Storm s;
+        switch (kind) {
+            case HURRICANE -> s = grid.storms.spawnHurricane(p.getX() + 600, p.getZ(), 50);       // a leste: os alísios o trazem
+            // Os criados por comando duram mais que os naturais, para dar tempo de observar.
+            case SUPERCELL -> s = grid.storms.spawnSupercell(p.getX(), p.getZ() - 120, 6);
+            default -> {
+                Storm sc = grid.storms.spawnSupercell(p.getX(), p.getZ() - 90, 6);
+                sc.ageH = sc.lifeH * 0.4;                                                          // já madura
+                s = grid.storms.spawnTornado(sc, 2, 3.0, cfg.cellBlocks);
+            }
+        }
+        double dist = Math.hypot(s.x - p.getX(), s.z - p.getZ());
+        String txt = String.format("%s criado a %.0f blocos (x %.0f, z %.0f).", s.describe(), dist, s.x, s.z);
+        ctx.getSource().sendSuccess(() -> Component.literal(txt), true);
+        for (ServerPlayer pl : p.serverLevel().players()) sendClimate(pl);
         return Command.SINGLE_SUCCESS;
     }
 
@@ -376,7 +428,44 @@ public final class ClimateMod implements ModInitializer {
                 (float) s.windSpeed(), (float) s.windFromDeg(), (float) s.precipMmH(),
                 (byte) s.cloud().ordinal(), s.thunder(), (float) s.latitudeDeg(),
                 (float) (s.windEast() * perTick), (float) (-s.windNorth() * perTick),
-                ocx * cb, ocz * cb, cb, size, types, cover, base, top));
+                ocx * cb, ocz * cb, cb, size, types, cover, base, top, stormsNear(p.getX(), p.getZ(), 1500)));
+    }
+
+    private static List<StormInfo> stormsNear(double x, double z, double range) {
+        List<StormInfo> out = new java.util.ArrayList<>();
+        for (Storm s : grid.storms.storms)
+            if (Math.hypot(s.x - x, s.z - z) < range + s.radiusM / cfg.metersPerBlockH() * 6 && out.size() < 64)
+                out.add(StormInfo.of(s, cfg.metersPerBlockH()));
+        return out;
+    }
+
+    private static final java.util.Map<java.util.UUID, Long> lastMap = new java.util.HashMap<>();
+
+    /** Envia a grade inteira para o mapa-radar (no máximo uma vez por segundo por jogador). */
+    private static void sendMap(ServerPlayer p) {
+        if (grid == null || p.level().dimension() != Level.OVERWORLD) return;
+        long now = p.serverLevel().getGameTime();
+        Long last = lastMap.get(p.getUUID());
+        if (last != null && now - last < 20 && now >= last) return;
+        lastMap.put(p.getUUID(), now);
+        int n = grid.nx * grid.nz;
+        byte[] t = new byte[n], pr = new byte[n], h = new byte[n], r = new byte[n], u = new byte[n], v = new byte[n],
+                ct = new byte[n], cv = new byte[n], ter = new byte[n];
+        for (int k = 0; k < n; k++) {
+            t[k] = MapPayload.encTemp(grid.temp[k]);
+            pr[k] = MapPayload.encPres(grid.pSea[k]);
+            h[k] = MapPayload.encHum(Math.min(1, grid.e[k] / Physics.satPressure(grid.temp[k])));
+            r[k] = MapPayload.encRain(grid.precipRate[k]);
+            u[k] = MapPayload.encWind(grid.u[k]);
+            v[k] = MapPayload.encWind(grid.v[k]);
+            ct[k] = (byte) (grid.type[k] == null ? 0 : grid.type[k].ordinal());
+            cv[k] = (byte) Math.round(grid.coverage(k) * 255);
+            ter[k] = MapPayload.encTerrain(grid.water[k], grid.elev[k]);
+        }
+        List<StormInfo> storms = new java.util.ArrayList<>();
+        for (Storm s : grid.storms.storms) if (storms.size() < 64) storms.add(StormInfo.of(s, cfg.metersPerBlockH()));
+        ServerPlayNetworking.send(p, new MapPayload(grid.originCellX, grid.originCellZ, grid.nx, grid.nz, cfg.cellBlocks,
+                (float) cfg.halfRangeBlocks, t, pr, h, r, u, v, ct, cv, ter, storms));
     }
 
     /** Converte altitude (m acima do mar) em Y do mundo, comprimindo o que fica muito alto. */

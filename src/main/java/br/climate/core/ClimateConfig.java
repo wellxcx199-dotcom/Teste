@@ -40,6 +40,16 @@ public final class ClimateConfig {
     public double precipThreshold = 0.5;
     public double landEvapFraction = 0.65;
     public double mmPerUnit = 1.5;
+    /** Fenômenos: fator de velocidade de deslocamento (como windSpeedFactor) e frequências. */
+    public double stormSpeedFactor = 0.7;
+    public int maxHurricanes = 1;
+    /** Chance de nascer um furacão por dia de jogo, quando a região tem bastante oceano quente. */
+    public double hurricanesPerDay = 0.5;
+    public int maxSupercells = 3;
+    /** Chance por hora de jogo de um cumulonimbo forte virar supercélula. */
+    public double supercellsPerHour = 0.08;
+    /** Chance por hora de jogo de uma supercélula madura (base baixa) gerar um tornado. */
+    public double tornadoPerHour = 0.6;
     /** Trovoada: só cumulonimbos com chuva acima deste limiar (mm/h), os mais maduros. */
     public double thunderMinMmH = 1.2;
 }

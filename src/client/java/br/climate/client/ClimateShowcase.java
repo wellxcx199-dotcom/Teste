@@ -69,6 +69,6 @@ final class ClimateShowcase {
         ClimatePayload real = ClientClimate.latest();
         return new ClimatePayload(real != null ? real.tempC() : 20, y, 0.0975f, real != null ? real.humidity() : 0.6f,
                 real != null ? real.pressureHPa() : 1013, 0, 0, 0, (byte) 0, false, 0, 0, 0,
-                ocx * cb, ocz * cb, cb, size, types, cover, base, top);
+                ocx * cb, ocz * cb, cb, size, types, cover, base, top, java.util.List.of());
     }
 }

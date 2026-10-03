@@ -29,6 +29,8 @@ public final class ClimateGrid {
     /** Anomalia de temperatura suavizada (°C), que gera as baixas térmicas e as brisas. */
     public final double[] anom;
     public final CloudType[] type;
+    /** Furacões, supercélulas e tornados em andamento. */
+    public final StormSystem storms;
 
     private final double[] tmpA, tmpB;
     private double curYr;
@@ -48,6 +50,7 @@ public final class ClimateGrid {
         pTend = new double[n]; precipRate = new double[n]; precipTotal = new double[n];
         anom = new double[n];
         type = new CloudType[n];
+        storms = new StormSystem(31L * originCellX + originCellZ);
         tmpA = new double[n]; tmpB = new double[n];
 
         for (int j = 0; j < nz; j++)
@@ -71,6 +74,7 @@ public final class ClimateGrid {
         wOro = o.wOro.clone(); wDiv = o.wDiv.clone(); wTh = o.wTh.clone(); w = o.w.clone();
         pTend = o.pTend.clone(); precipRate = o.precipRate.clone(); precipTotal = o.precipTotal.clone();
         anom = o.anom.clone();
+        storms = o.storms.copy(31L * o.originCellX + o.originCellZ + 7);
         type = o.type.clone();
         tmpA = new double[o.tmpA.length]; tmpB = new double[o.tmpB.length];
     }
@@ -259,11 +263,48 @@ public final class ClimateGrid {
         curYr = yr;
         updateTemperature(dtHours, tod, yr);
         advect(dtHours);
+        storms.evolve(this, dtHours);      // move os fenômenos antes de aplicá-los à grade
         computePressure(dtHours);
+        storms.imposePressure(this);
         computeWind(false);
+        storms.imposeWind(this);
         computeVertical();
         computeMoisture(dtHours);
+        storms.imposeMoisture(this, dtHours);
         classify();
+    }
+
+    // ---------- Apoio aos fenômenos (StormSystem) ----------
+
+    /** Latitude (graus) de uma coordenada Z do mundo. */
+    public double latitudeAtZ(double worldZ) {
+        return clamp(-worldZ / cfg.halfRangeBlocks, -1, 1) * 90.0;
+    }
+
+    /**
+     * Vento de condução (m/s, leste e norte): o vento médio da troposfera que leva furacões e
+     * tempestades. É quase zonal (leste-oeste) e mais fraco que o geostrófico da superfície:
+     * metade dele, com Coriolis mínimo de 5° de latitude para não explodir no equador.
+     */
+    public double[] steeringWind(double worldZ) {
+        double lat = latitudeAtZ(worldZ);
+        double s = Math.sin(Math.toRadians(lat));
+        if (Math.abs(s) < Math.sin(Math.toRadians(5))) s = Math.copySign(Math.sin(Math.toRadians(5)), s == 0 ? 1 : s);
+        double f = 2 * OMEGA * s;
+        return new double[] {-0.5 * hadleyGradientAtZ(worldZ) / (RHO * f), 0};
+    }
+
+    public double cellCenterX(int k) { return (originCellX + k % nx + 0.5) * cfg.cellBlocks; }
+
+    public double cellCenterZ(int k) { return (originCellZ + k / nx + 0.5) * cfg.cellBlocks; }
+
+    public boolean containsBlock(double x, double z) { return contains(x, z); }
+
+    /** Perto da janela simulada (até uma largura de janela de distância): o fenômeno continua existindo. */
+    public boolean nearWindow(double x, double z) {
+        double w = nx * cfg.cellBlocks, h = nz * cfg.cellBlocks;
+        double x0 = originCellX * (double) cfg.cellBlocks, z0 = originCellZ * (double) cfg.cellBlocks;
+        return x > x0 - w && x < x0 + 2 * w && z > z0 - h && z < z0 + 2 * h;
     }
 
     private double timeOfDay(double h) { return (((h % 24) + 24) % 24) / 24.0; }
@@ -360,9 +401,12 @@ public final class ClimateGrid {
 
     /** Gradiente norte-sul (Pa/m, positivo se a pressão cresce para o norte) das faixas de Hadley. */
     private double hadleyGradient(int j) {
-        double worldZ = (originCellZ + j + 0.5) * cfg.cellBlocks;
+        return hadleyGradientAtZ((originCellZ + j + 0.5) * cfg.cellBlocks);
+    }
+
+    private double hadleyGradientAtZ(double worldZ) {
         if (Math.abs(worldZ) >= cfg.halfRangeBlocks) return 0;                 // além do polo
-        double lat = latitudeDeg(j);
+        double lat = latitudeAtZ(worldZ);
         double dPdLat = 8.0 * 6 * Math.sin(Math.toRadians(6 * lat)) * Math.PI / 180;  // hPa por grau
         double degPerMeter = 90.0 / (cfg.halfRangeBlocks * cfg.metersPerBlockH());
         return dPdLat * degPerMeter * 100.0;

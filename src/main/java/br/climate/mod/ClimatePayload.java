@@ -6,6 +6,8 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.List;
+
 /**
  * Pacote servidor -> cliente com o clima local do jogador e um recorte da grade de nuvens
  * ao redor dele. Só é enviado a clientes que têm o mod; clientes vanilla continuam vendo
@@ -32,12 +34,13 @@ import net.minecraft.resources.ResourceLocation;
  * @param cover        cobertura por célula, 0 a 255
  * @param baseY        altura (Y do mundo) da base da nuvem
  * @param topY         altura (Y do mundo) do topo da nuvem
+ * @param storms       furacões, supercélulas e tornados próximos
  */
 public record ClimatePayload(
         float tempC, float refY, float lapsePerBlock, float humidity, float pressureHPa, float windSpeed, float windFromDeg,
         float precipMmH, byte cloudType, boolean thunder, float latitude,
         float driftX, float driftZ, int originX, int originZ, int cellBlocks, int size,
-        byte[] types, byte[] cover, short[] baseY, short[] topY) implements CustomPacketPayload {
+        byte[] types, byte[] cover, short[] baseY, short[] topY, List<StormInfo> storms) implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<ClimatePayload> TYPE =
             new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(ClimateMod.ID, "climate"));
@@ -54,6 +57,7 @@ public record ClimatePayload(
         buf.writeBytes(types).writeBytes(cover);
         for (short s : baseY) buf.writeShort(s);
         for (short s : topY) buf.writeShort(s);
+        StormInfo.writeList(buf, storms);
     }
 
     private static ClimatePayload read(FriendlyByteBuf buf) {
@@ -77,7 +81,7 @@ public record ClimatePayload(
         for (int k = 0; k < n; k++) if (types[k] < 0 || types[k] >= nTypes) types[k] = 0;
         if (ct < 0 || ct >= nTypes) ct = 0;
         return new ClimatePayload(t, refY, lapse, rh, p, ws, wd, pr, ct, th, lat, dx, dz, ox, oz, cb, size,
-                types, cover, base, top);
+                types, cover, base, top, StormInfo.readList(buf));
     }
 
     @Override

@@ -45,6 +45,9 @@ disponíveis (Fabric e NeoForge), o que facilita usar o mod junto com outros.
 | `/clima previsao` | Previsão para as próximas 24 h, de 3 em 3 horas |
 | Tecla **K** | Mostra/oculta o painel do tempo no canto da tela (muda em Opções → Controles) |
 | `/climavitrine` | Mostra ao norte um exemplar de cada tipo de nuvem (só no seu cliente); de novo para desligar |
+| Tecla **M** | Abre o mapa-radar (radar, temperatura, vento, umidade, pressão, nuvens) |
+| `/clima fenomenos` | Lista furacões, supercélulas e tornados ativos, com distância e direção |
+| `/clima fenomeno furacao\|supercelula\|tornado` | Cria um fenômeno perto de você (precisa de permissão de operador) |
 
 ![Saída do comando /clima](docs/comando-clima.png)
 
@@ -65,6 +68,38 @@ dos lagos derretem aos poucos. No vanilla isso não acontece: a neve depende só
 e nunca derrete sozinha.
 
 Clientes **sem** o mod podem entrar num servidor que o tem; eles veem só o clima global.
+
+## Mapa-radar
+
+A tecla **M** abre um mapa de toda a área simulada, com o norte para cima. Os botões à
+direita trocam a camada: **radar** (chuva convertida em refletividade, em dBZ, pela relação
+de Marshall-Palmer Z = 200·R^1,6, com as cores dos radares meteorológicos), **temperatura**,
+**vento** (cores pela velocidade e setas na direção para onde sopra), **umidade**,
+**pressão** (com isóbaras a cada 4 hPa) e **nuvens**. Passar o mouse mostra os valores de
+cada ponto. O mapa também marca você, os fenômenos (com nome e categoria) e a escala.
+
+![Mapa-radar com um furacão](docs/mapa-radar.jpg)
+
+## Fenômenos: furacões, supercélulas e tornados
+
+**Furacões** nascem sobre oceano quente (≥ 26,5 °C) entre 5° e 25° de latitude, onde a
+força de Coriolis já organiza a rotação. Intensificam sobre água quente até uma
+"intensidade potencial" que cresce com a temperatura do mar, enfraquecem sobre terra e são
+levados pelos alísios para oeste, com uma deriva para o polo. A pressão segue o perfil de
+Holland: olho calmo e sem nuvens, parede do olho com trovoadas e ventos máximos, e bandas
+de chuva em espiral. Ventos acima de 25 m/s empurram quem está a céu aberto.
+
+**Supercélulas** são cumulonimbos com rotação. Nascem de tempestades fortes sobre terra
+quando há vento de grande escala (cisalhamento), duram algumas horas e se deslocam à direita
+do vento médio. São desenhadas como a maior torre de tempestade, com nuvem-parede rebaixada
+e topo saliente furando a bigorna.
+
+**Tornados** nascem de supercélulas maduras com base de nuvem baixa (ar úmido junto ao
+chão). O funil vai do chão até a nuvem-parede, gira, levanta poeira, puxa e arremessa
+entidades e arranca folhas, plantas e neve. A categoria (EF0 a EF5) segue a distribuição
+real: a maioria é fraca. O painel avisa o fenômeno mais próximo.
+
+![Tornado sob uma supercélula](docs/tornado.jpg)
 
 ## Nuvens: formas e texturas
 
@@ -96,6 +131,10 @@ anotados no log. Principais opções:
 | `mod.syncVanillaWeather` | true | Chuva/trovoada do jogo seguem o modelo |
 | `mod.snowFromModel` | true | Neve e gelo pela temperatura simulada |
 | `mod.meltSnow` / `meltAboveC` | true / 2,0 | Derretimento de neve e gelo |
+| `mod.tornadoPushesEntities` | true | Tornados puxam e levantam jogadores, mobs e itens |
+| `mod.tornadoBreaksBlocks` | true | Tornados arrancam folhas, plantas e neve (nada construído) |
+| `mod.strongWindPushesPlayers` | true | Ventos de furacão empurram jogadores a céu aberto |
+| `physics.hurricanesPerDay` / `supercellsPerHour` / `tornadoPerHour` | 0,5 / 0,08 / 0,6 | Frequência dos fenômenos |
 | `physics.halfRangeBlocks` | 20000 | Blocos do equador ao polo (o "tamanho do planeta") |
 | `physics.daysPerYear` | 24 | Dias de jogo por ano (duração das estações) |
 | `physics.frictionLand` / `frictionSea` | 8e-5 / 4e-5 | Atrito do vento com o solo e com o mar |
@@ -128,6 +167,7 @@ inúmeros laguinhos e rios do Minecraft não deixam o interior com clima maríti
 ```
 src/main/java/br/climate/core/   Motor climático em Java puro, sem dependência do Minecraft
   ClimateGrid      a simulação (temperatura, advecção, pressão, vento, umidade, nuvens, previsão)
+  Storm, StormSystem  furacões, supercélulas e tornados: nascimento, deslocamento, intensidade, efeitos
   Physics          fórmulas e constantes: Magnus, ponto de orvalho, pressão barométrica
   ClimateConfig    parâmetros físicos ajustáveis (seção "physics" do climamod.json)
   TerrainSource    interface que o motor usa para "ver" o relevo
@@ -135,7 +175,9 @@ src/main/java/br/climate/mod/    Integração com o servidor
   ClimateMod       ciclo de simulação, clima vanilla, neve/degelo, comandos, envio aos jogadores
   ClimateSettings  leitura e validação de config/climamod.json
   ClimateSavedData salva/carrega o estado em world/data/climamod_climate.dat
-  ClimatePayload   pacote de rede com o clima local e as nuvens ao redor do jogador
+  ClimatePayload   pacote de rede com o clima local, as nuvens e os fenômenos ao redor do jogador
+  MapPayload, MapRequestPayload  dados do mapa-radar (a grade inteira, enviada a pedido)
+  StormEffects     efeitos dos tornados e dos ventos fortes no mundo
   MinecraftTerrain lê relevo e bioma do gerador de mundo, em segundo plano e com cache
   mixin/           neve e gelo pela temperatura simulada
 src/client/java/br/climate/client/  Parte visual (só no cliente)
@@ -143,6 +185,8 @@ src/client/java/br/climate/client/  Parte visual (só no cliente)
   ClimateHud                     painel do tempo na tela (tecla K)
   CloudShapes, CloudRenderer      formas em voxel de cada tipo de nuvem e o desenho com texturas
   ClimateShowcase                comando /climavitrine
+  ClimateMapScreen               tela do mapa-radar (tecla M)
+  TornadoRenderer                funil do tornado e partículas
   mixin/                         chuva local, neve pela temperatura, neblina, oculta as nuvens vanilla
 src/test/java/br/climate/core/   Testes JUnit e as demonstrações Demo/Demo2
 tools/gerar_texturas_nuvens.py   gera o atlas de texturas das nuvens

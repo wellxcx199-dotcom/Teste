@@ -1,6 +1,8 @@
 package br.climate.client;
 
 import br.climate.core.CloudType;
+import br.climate.core.Storm;
+import br.climate.mod.StormInfo;
 import br.climate.mod.ClimatePayload;
 
 import java.util.ArrayList;
@@ -46,13 +48,165 @@ final class CloudShapes {
         java.util.Arrays.fill(matB, EMPTY);
         CloudType[] types = CloudType.values();
         int cellX0 = Math.floorDiv(p.originX(), p.cellBlocks()), cellZ0 = Math.floorDiv(p.originZ(), p.cellBlocks());
+        double dl = Math.hypot(p.driftX(), p.driftZ());
+        windX = dl > 1e-6 ? p.driftX() / dl : 1;          // direção para onde o vento leva a bigorna
+        windZ = dl > 1e-6 ? p.driftZ() / dl : 0;
+        for (StormInfo st : p.storms())
+            if (st.stormKind() == Storm.Kind.HURRICANE) eyes.add(new double[] {st.x(), st.z(), 0.55 * st.radius()});
+        float[] cbScale = clusterLeaders(p, types);
+        try { buildCells(p, types, cbScale, cellX0, cellZ0); } finally { wallClouds = List.copyOf(walls); }
+    }
+
+    private void buildCells(ClimatePayload p, CloudType[] types, float[] cbScale, int cellX0, int cellZ0) {
         for (int j = 0; j < p.size(); j++)
             for (int i = 0; i < p.size(); i++) {
                 int idx = j * p.size() + i;
                 CloudType t = types[p.types()[idx]];
+                if (cbScale[idx] != 0) t = CloudType.CUMULONIMBUS;  // torre principal (ou supercélula) é sempre cumulonimbo
                 if (t == CloudType.CLEAR || t == CloudType.FOG) continue;
                 float cover = (p.cover()[idx] & 0xFF) / 255f;
-                shape(t, i, j, cellX0 + i, cellZ0 + j, p.baseY()[idx], p.topY()[idx], cover);
+                int base = p.baseY()[idx], top = p.topY()[idx];
+                if (t == CloudType.CUMULONIMBUS && top - base < 40) {
+                    // Célula sem nuvem ainda (supercélula recém-criada): base pelas vizinhas ou acima do jogador.
+                    if (types[p.types()[idx]] == CloudType.CLEAR || base <= 0) base = neighbourBase(p, types, i, j);
+                    top = base + 90;
+                }
+                if (cbScale[idx] < 0) {                       // supercélula: base alta o bastante para o funil aparecer
+                    int minBase = Math.round(p.refY()) + 40;
+                    if (base < minBase) { top += minBase - base; base = minBase; }
+                }
+                if (t == CloudType.CUMULONIMBUS && cbScale[idx] == 0) congestus(i, j, cellX0 + i, cellZ0 + j, base, top);
+                else if (t == CloudType.CUMULONIMBUS)
+                    giantCumulonimbus(i, j, cellX0 + i, cellZ0 + j, base, top, Math.abs(cbScale[idx]), cbScale[idx] < 0);
+                else shape(t, i, j, cellX0 + i, cellZ0 + j, base, top, cover);
+            }
+    }
+
+    private final double windX, windZ;
+    /** Nuvens-parede das supercélulas (x, z, Y da base), para o funil do tornado terminar nelas. */
+    static volatile List<double[]> wallClouds = List.of();
+    private final List<double[]> walls = new ArrayList<>();
+    /** Olhos de furacão (x, z, raio em blocos): o ar desce ali e nenhuma bigorna os cobre. */
+    private final List<double[]> eyes = new ArrayList<>();
+
+    private boolean inEye(int gx, int gz) {
+        double x = originX + (gx + 0.5) * colW, z = originZ + (gz + 0.5) * colW;
+        for (double[] e : eyes) if (Math.hypot(x - e[0], z - e[1]) < e[2]) return true;
+        return false;
+    }
+
+    /**
+     * Num aglomerado de células de cumulonimbo, só a mais forte (topo mais alto, depois mais
+     * cobertura) vira a torre principal; as outras viram cúmulos congestos ao redor.
+     * Retorna, por célula: 0 = não é torre principal; >0 = escala da torre; <0 = supercélula
+     * (o valor absoluto é a escala).
+     */
+    private static float[] clusterLeaders(ClimatePayload p, CloudType[] types) {
+        int size = p.size(), n = size * size, R = 3;
+        float[] scale = new float[n];
+        for (int j = 0; j < size; j++)
+            for (int i = 0; i < size; i++) {
+                int idx = j * size + i;
+                if (types[p.types()[idx]] != CloudType.CUMULONIMBUS) continue;
+                long mine = strength(p, idx);
+                boolean leader = true;
+                int count = 0;
+                for (int b = Math.max(0, j - R); b <= Math.min(size - 1, j + R) && leader; b++)
+                    for (int a = Math.max(0, i - R); a <= Math.min(size - 1, i + R); a++) {
+                        int o = b * size + a;
+                        if (types[p.types()[o]] != CloudType.CUMULONIMBUS) continue;
+                        count++;
+                        long other = strength(p, o);
+                        if (other > mine || (other == mine && o < idx)) { leader = false; break; }
+                    }
+                if (leader) scale[idx] = Math.min(1.8f, 1 + 0.12f * (count - 1));
+            }
+        // Supercélulas: a célula onde estão vira a maior torre, com nuvem-parede e topo saliente.
+        int cellX0 = Math.floorDiv(p.originX(), p.cellBlocks()), cellZ0 = Math.floorDiv(p.originZ(), p.cellBlocks());
+        for (StormInfo s : p.storms()) {
+            if (s.stormKind() != Storm.Kind.SUPERCELL) continue;
+            int i = Math.floorDiv((int) Math.floor(s.x()), p.cellBlocks()) - cellX0;
+            int j = Math.floorDiv((int) Math.floor(s.z()), p.cellBlocks()) - cellZ0;
+            if (i < 0 || j < 0 || i >= size || j >= size) continue;
+            for (int b = Math.max(0, j - R); b <= Math.min(size - 1, j + R); b++)    // é a única torre principal ali
+                for (int a = Math.max(0, i - R); a <= Math.min(size - 1, i + R); a++) scale[b * size + a] = 0;
+            scale[j * size + i] = -Math.max(1.7f, 1.3f + 0.5f * s.intensity());
+        }
+        return scale;
+    }
+
+    private static int neighbourBase(ClimatePayload p, CloudType[] types, int i, int j) {
+        int size = p.size(), sum = 0, n = 0;
+        for (int b = Math.max(0, j - 2); b <= Math.min(size - 1, j + 2); b++)
+            for (int a = Math.max(0, i - 2); a <= Math.min(size - 1, i + 2); a++) {
+                int o = b * size + a;
+                CloudType t = types[p.types()[o]];
+                if (t != CloudType.CLEAR && t != CloudType.FOG && t != CloudType.CIRRUS && p.baseY()[o] > 0) { sum += p.baseY()[o]; n++; }
+            }
+        return n > 0 ? sum / n : Math.round(p.refY()) + 45;
+    }
+
+    private static long strength(ClimatePayload p, int idx) {
+        return (long) p.topY()[idx] * 256 + (p.cover()[idx] & 0xFF);
+    }
+
+    /** Cúmulo congesto: torre de tempestade menor, sem bigorna, ao lado da torre principal. */
+    private void congestus(int i, int j, int cellX, int cellZ, int base, int top) {
+        int gx0 = i * COLS_PER_CELL, gz0 = j * COLS_PER_CELL;
+        float h = (top - base) * 0.45f;
+        double ccx = 1.5 + (rnd(cellX, cellZ, 70) - 0.5), ccz = 1.5 + (rnd(cellX, cellZ, 71) - 0.5);
+        for (int b = 0; b < COLS_PER_CELL; b++)
+            for (int a = 0; a < COLS_PER_CELL; a++) {
+                double d = Math.hypot(a + 0.5 - ccx, b + 0.5 - ccz) / (1.9 * (0.8 + 0.4 * rnd(cellX * 4 + a, cellZ * 4 + b, 72)));
+                if (d >= 1) continue;
+                setA(gx0 + a, gz0 + b, base, base + Math.round(h * (1 - 0.6f * (float) (d * d))), CloudType.CUMULUS);
+            }
+    }
+
+    /**
+     * Cumulonimbo principal. Proporções (com a espessura das nuvens comprimida a 100 m por
+     * bloco): torre de ~35 a 60 blocos de largura e bigorna de ~60 a 115, espalhada na direção
+     * do vento. Na supercélula, a base da torre desce numa "nuvem-parede" e um domo ("topo
+     * saliente") fura a bigorna, sinal de corrente ascendente muito forte.
+     */
+    private void giantCumulonimbus(int i, int j, int cellX, int cellZ, int base, int top, float scale, boolean supercell) {
+        CloudType t = CloudType.CUMULONIMBUS;
+        int gx0 = i * COLS_PER_CELL, gz0 = j * COLS_PER_CELL;
+        float h = Math.max(40, top - base);
+        float anvil = Math.max(4, Math.round(h / 7f));
+        float towerH = h - anvil;
+        double ccx = 1.5 + (rnd(cellX, cellZ, 50) - 0.5), ccz = 1.5 + (rnd(cellX, cellZ, 51) - 0.5);
+        double rt = 2.7 * 1.6 * scale, ra = 3.6 * 2.2 * scale;
+        int reachT = (int) Math.ceil(rt) + 1;
+        for (int b = -reachT; b < COLS_PER_CELL + reachT; b++)
+            for (int a = -reachT; a < COLS_PER_CELL + reachT; a++) {
+                int wx = cellX * COLS_PER_CELL + a, wz = cellZ * COLS_PER_CELL + b;
+                double d = Math.hypot(a + 0.5 - ccx, b + 0.5 - ccz) / (rt * (0.85 + 0.3 * vnoise(wx / 1.5, wz / 1.5, 52)));
+                int gx = gx0 + a, gz = gz0 + b;
+                if (d >= 1 || gx < 0 || gz < 0 || gx >= cols || gz >= cols) continue;
+                // "Ombros" mais baixos nas bordas e bolhas no meio da torre.
+                float y1 = base + Math.round(towerH * (1 - 0.5f * (float) (d * d)) + (float) (vnoise(wx / 1.6, wz / 1.6, 54) * 8 - 4));
+                float y0 = base + (d > 0.8 ? 2 : 0);
+                if (supercell && d < 0.45) y0 = base - 7 + Math.round((float) (d / 0.45) * 3);   // nuvem-parede
+                setA(gx, gz, y0, y1, t);
+                int k = index(gx, gz);
+                towerBase[k] = base; towerTop[k] = base + towerH;
+                if (d < (supercell ? 0.75 : 0.6) && (rnd(wx, wz, 55) < 0.6)) addRain(gx, gz, y0);
+            }
+        if (supercell) walls.add(new double[] {originX + (gx0 + ccx) * colW, originZ + (gz0 + ccz) * colW, base - 7});
+        // Bigorna: larga, com o centro deslocado na direção do vento em altitude.
+        double acx = ccx + windX * 0.35 * ra, acz = ccz + windZ * 0.35 * ra;
+        int reachA = (int) Math.ceil(ra + 0.35 * ra) + 1;
+        for (int b = -reachA; b < COLS_PER_CELL + reachA; b++)
+            for (int a = -reachA; a < COLS_PER_CELL + reachA; a++) {
+                int wx = cellX * COLS_PER_CELL + a, wz = cellZ * COLS_PER_CELL + b;
+                double d = Math.hypot(a + 0.5 - acx, b + 0.5 - acz) / (ra * (0.8 + 0.35 * vnoise(wx / 2.0, wz / 2.0, 53)));
+                if (d >= 1) continue;
+                float y0 = base + towerH + (d > 0.7 ? 1 : 0) + (d > 0.9 ? 1 : 0);
+                float y1 = base + h - (d > 0.85 ? 1 : 0);
+                double dt = Math.hypot(a + 0.5 - ccx, b + 0.5 - ccz);
+                if (supercell && dt < rt * 0.3) y1 += Math.round(6 * (1 - dt / (rt * 0.3)));   // topo saliente
+                setB(gx0 + a, gz0 + b, y0, y1);
             }
     }
 
@@ -66,7 +220,7 @@ final class CloudShapes {
     }
 
     private void setB(int gx, int gz, float y0, float y1) {
-        if (gx < 0 || gz < 0 || gx >= cols || gz >= cols || y1 - y0 < 1) return;
+        if (gx < 0 || gz < 0 || gx >= cols || gz >= cols || y1 - y0 < 1 || inEye(gx, gz)) return;
         int k = index(gx, gz);
         if (matB[k] != EMPTY) return;
         if (matA[k] != EMPTY && y1a[k] > y0) return;                   // não atravessa outra nuvem
@@ -125,37 +279,7 @@ final class CloudShapes {
                         if (cover > 0.35f && vnoise(wx / 1.2, wz / 1.2, 24) > 0.58) addRain(gx0 + a, gz0 + b, y0);
                     }
             }
-            case CUMULONIMBUS -> {
-                // Torre com "ombros" mais baixos e a bigorna larga e clara no topo.
-                float anvil = Math.max(3, Math.round(h / 8f));
-                float towerH = h - anvil;
-                double ccx = 1.5 + (rnd(cellX, cellZ, 50) - 0.5), ccz = 1.5 + (rnd(cellX, cellZ, 51) - 0.5);
-                double rt = 2.7;
-                for (int b = -2; b < COLS_PER_CELL + 2; b++)
-                    for (int a = -2; a < COLS_PER_CELL + 2; a++) {
-                        int wx = cellX * COLS_PER_CELL + a, wz = cellZ * COLS_PER_CELL + b;
-                        double d = Math.hypot(a + 0.5 - ccx, b + 0.5 - ccz) / (rt * (0.85 + 0.3 * vnoise(wx, wz, 52)));
-                        int gx = gx0 + a, gz = gz0 + b;
-                        if (d < 1 && gx >= 0 && gz >= 0 && gx < cols && gz < cols) {
-                            // "Ombros" mais baixos nas bordas e bolhas no meio da torre.
-                            float y1 = base + Math.round(towerH * (1 - 0.5f * (float) (d * d))
-                                    + (float) (vnoise(wx / 1.3, wz / 1.3, 54) * 6 - 3));
-                            setA(gx, gz, base + (d > 0.8 ? 2 : 0), y1, t);
-                            int k = index(gx, gz);
-                            towerBase[k] = base; towerTop[k] = base + towerH;
-                            if (d < 0.6) addRain(gx, gz, base);
-                        }
-                    }
-                // A bigorna passa da célula: até ~1,8 célula de largura.
-                for (int b = -3; b < COLS_PER_CELL + 3; b++)
-                    for (int a = -3; a < COLS_PER_CELL + 3; a++) {
-                        int wx = cellX * COLS_PER_CELL + a, wz = cellZ * COLS_PER_CELL + b;
-                        double d = Math.hypot(a + 0.5 - ccx, b + 0.5 - ccz) / (3.6 * (0.8 + 0.35 * vnoise(wx / 1.5, wz / 1.5, 53)));
-                        if (d >= 1) continue;
-                        float y0 = base + towerH + (d > 0.7 ? 1 : 0);
-                        setB(gx0 + a, gz0 + b, y0, base + h - (d > 0.85 ? 1 : 0));
-                    }
-            }
+            case CUMULONIMBUS -> giantCumulonimbus(i, j, cellX, cellZ, base, top, 1f, false);
             case CIRRUS -> {
                 // Duas faixas finas e altas, quase paralelas, cruzando a célula.
                 for (int s = 0; s < 2; s++) {
