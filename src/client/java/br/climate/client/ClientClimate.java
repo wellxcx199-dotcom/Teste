@@ -35,6 +35,7 @@ public final class ClientClimate {
         ticksSince = Long.MAX_VALUE;
         rain = rainO = thunder = thunderO = fog = fogO = 0;
         insideCloud = false;
+        showcase = null;
     }
 
     public static boolean active() {
@@ -42,6 +43,19 @@ public final class ClientClimate {
     }
 
     public static ClimatePayload latest() { return latest; }
+
+    /** Nuvens de demonstração do /climavitrine; quando presentes, substituem as simuladas. */
+    private static ClimatePayload showcase;
+
+    static ClimatePayload showcase() { return showcase; }
+
+    static void setShowcase(ClimatePayload p) { showcase = p; }
+
+    /** Há nuvens para desenhar (simuladas ou da vitrine). */
+    public static boolean cloudsActive() { return showcase != null || active(); }
+
+    /** O recorte de nuvens a desenhar: a vitrine, se ligada, ou o último recebido do servidor. */
+    public static ClimatePayload cloudSource() { return showcase != null ? showcase : latest; }
 
     /** Ticks desde o último pacote, para o deslocamento das nuvens com o vento. */
     public static long ticksSince() { return ticksSince; }

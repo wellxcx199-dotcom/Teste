@@ -15,6 +15,7 @@ public final class ClimateClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(ClimatePayload.TYPE, (payload, ctx) -> ClientClimate.accept(payload));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientClimate.reset());
         ClimateHud.register();
+        ClimateShowcase.register();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ClimateHud.tick();
             if (client.level != null && !client.isPaused()) ClientClimate.tick();

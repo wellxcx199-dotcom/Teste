@@ -15,6 +15,6 @@ public abstract class LevelRendererMixin {
     @Inject(method = "renderClouds", at = @At("HEAD"), cancellable = true)
     private void climamod$hideVanillaClouds(CallbackInfo ci) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level != null && mc.level.dimension() == Level.OVERWORLD && ClientClimate.active()) ci.cancel();
+        if (mc.level != null && mc.level.dimension() == Level.OVERWORLD && ClientClimate.cloudsActive()) ci.cancel();
     }
 }

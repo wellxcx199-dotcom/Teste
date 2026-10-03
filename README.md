@@ -44,6 +44,7 @@ disponíveis (Fabric e NeoForge), o que facilita usar o mod junto com outros.
 | `/clima` | Tempo agora onde você está: temperatura, pressão, umidade, vento, nuvens, chuva |
 | `/clima previsao` | Previsão para as próximas 24 h, de 3 em 3 horas |
 | Tecla **K** | Mostra/oculta o painel do tempo no canto da tela (muda em Opções → Controles) |
+| `/climavitrine` | Mostra ao norte um exemplar de cada tipo de nuvem (só no seu cliente); de novo para desligar |
 
 ![Saída do comando /clima](docs/comando-clima.png)
 
@@ -64,6 +65,23 @@ dos lagos derretem aos poucos. No vanilla isso não acontece: a neve depende só
 e nunca derrete sozinha.
 
 Clientes **sem** o mod podem entrar num servidor que o tem; eles veem só o clima global.
+
+## Nuvens: formas e texturas
+
+As nuvens são desenhadas no estilo das nuvens do Minecraft, mas com uma forma para cada
+tipo. Cada célula de 16 blocos vira 4×4 colunas de 4 blocos: cúmulos em domo de base reta,
+estratos em camada fina com bordas irregulares, nimbostratos grossos e escuros com cortinas
+de chuva, cumulonimbos com torre e bigorna, e cirros em faixas finas e altas.
+
+![Vitrine das nuvens](docs/vitrine-nuvens.jpg)
+
+As texturas são pixel art de 16×16 num único atlas,
+`src/client/resources/assets/climamod/textures/environment/clouds_atlas.png`, gerado pelo
+script `tools/gerar_texturas_nuvens.py` (rode `python3 tools/gerar_texturas_nuvens.py`
+depois de mudar o script; precisa do Pillow). Também dá para editar o PNG direto num editor
+de imagens. Elas são quase brancas porque a cor vem da hora do dia e do tipo de nuvem.
+
+![Texturas das nuvens](docs/texturas-nuvens.png)
 
 ## Configuração
 
@@ -123,9 +141,11 @@ src/main/java/br/climate/mod/    Integração com o servidor
 src/client/java/br/climate/client/  Parte visual (só no cliente)
   ClimateClient, ClientClimate   recebem o pacote e suavizam chuva, trovoada e neblina
   ClimateHud                     painel do tempo na tela (tecla K)
-  CloudRenderer                  nuvens 3D conforme o tipo, ordenadas e com recorte por visão
+  CloudShapes, CloudRenderer      formas em voxel de cada tipo de nuvem e o desenho com texturas
+  ClimateShowcase                comando /climavitrine
   mixin/                         chuva local, neve pela temperatura, neblina, oculta as nuvens vanilla
 src/test/java/br/climate/core/   Testes JUnit e as demonstrações Demo/Demo2
+tools/gerar_texturas_nuvens.py   gera o atlas de texturas das nuvens
 ```
 
 ## Limitações conhecidas
