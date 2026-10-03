@@ -36,6 +36,7 @@ public final class CloudRenderer {
     private static final CloudType[] TYPES = CloudType.values();
 
     public static void render(WorldRenderContext ctx) {
+        ClientClimate.setInsideCloud(false);
         if (!ClientClimate.active()) return;
         ClientLevel level = ctx.world();
         if (level == null || level.dimension() != Level.OVERWORLD) return;
@@ -79,6 +80,7 @@ public final class CloudRenderer {
                 order[count++] = ((long) Float.floatToIntBits(d2) << 32) | idx;
             }
         Arrays.sort(order, 0, count);
+        boolean inside = false;
 
         for (int q = count - 1; q >= 0; q--) {
             int idx = (int) order[q], i = idx % size, j = idx / size;
@@ -86,6 +88,11 @@ public final class CloudRenderer {
             double x0 = p.originX() + i * cb + offX, z0 = p.originZ() + j * cb + offZ;
             double dist = Math.hypot(x0 + cb / 2.0 - cam.x, z0 + cb / 2.0 - cam.z);
             float fade = (float) Math.min(1, Math.max(0, (radius - dist) / (0.25 * radius)));
+            // Perto da câmera a nuvem fica quase transparente: de dentro, uma nuvem é neblina,
+            // não uma parede. A neblina em si é feita pelo FogRendererMixin (ver insideCloud).
+            double near = distanceToBox(cam, x0, p.baseY()[idx], z0, x0 + cb, p.topY()[idx], z0 + cb);
+            if (near <= 0) inside = true;
+            fade *= (float) Math.min(1, Math.max(0.1, (near - 3) / 30));
             float cover = (p.cover()[idx] & 0xFF) / 255f;
             // Perspectiva aérea: quanto mais longe, mais a nuvem se confunde com o horizonte.
             double dy = p.baseY()[idx] - cam.y;
@@ -94,6 +101,7 @@ public final class CloudRenderer {
             cell(bb, m, type, x0, z0, cb, p.baseY()[idx], p.topY()[idx], cover, fade, tint, fog, haze, cellX, cellZ);
         }
 
+        ClientClimate.setInsideCloud(inside);
         MeshData mesh = bb.build();
         if (mesh != null) {
             RenderSystem.enableBlend();
@@ -164,6 +172,14 @@ public final class CloudRenderer {
             }
             default -> {}
         }
+    }
+
+    /** Distância da câmera até uma caixa (0 se a câmera está dentro dela). */
+    private static double distanceToBox(Vec3 c, double x0, double y0, double z0, double x1, double y1, double z1) {
+        double dx = Math.max(Math.max(x0 - c.x, 0), c.x - x1);
+        double dy = Math.max(Math.max(y0 - c.y, 0), c.y - y1);
+        double dz = Math.max(Math.max(z0 - c.z, 0), c.z - z1);
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     /** Caixa com sombreamento por face (topo claro, base escura), como as nuvens vanilla. */

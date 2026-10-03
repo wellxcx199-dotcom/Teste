@@ -20,6 +20,10 @@ public final class ClientClimate {
     private static long ticksSince = Long.MAX_VALUE;
 
     private static float rain, rainO, thunder, thunderO, fog, fogO;
+    /** A câmera está dentro de uma nuvem desenhada (atualizado pelo CloudRenderer a cada quadro). */
+    private static boolean insideCloud;
+
+    public static void setInsideCloud(boolean inside) { insideCloud = inside; }
 
     public static void accept(ClimatePayload p) {
         latest = p;
@@ -30,6 +34,7 @@ public final class ClientClimate {
         latest = null;
         ticksSince = Long.MAX_VALUE;
         rain = rainO = thunder = thunderO = fog = fogO = 0;
+        insideCloud = false;
     }
 
     public static boolean active() {
@@ -49,7 +54,8 @@ public final class ClientClimate {
         float rainTarget = latest.precipMmH() > 0.1f ? Mth.clamp(0.25f + latest.precipMmH() / 2.5f, 0, 1) : 0;
         rain = approach(rain, rainTarget, 0.01f);
         thunder = approach(thunder, latest.thunder() ? 1 : 0, 0.01f);
-        fog = approach(fog, latest.cloudType() == CloudType.FOG.ordinal() ? 1 : 0, 0.005f);
+        boolean foggy = insideCloud || latest.cloudType() == CloudType.FOG.ordinal();
+        fog = approach(fog, foggy ? 1 : 0, insideCloud ? 0.05f : 0.005f);   // entrar na nuvem é rápido
     }
 
     private static float approach(float v, float target, float step) {

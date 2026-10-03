@@ -528,7 +528,9 @@ public final class ClimateGrid {
         double tLocal = temp[k] + lapse(elev[k]) - lapse(Math.max(0, surfaceElevM));
         double p = pressureAtAltitude(pSea[k], Math.max(0, surfaceElevM));
         double es = satPressure(tLocal);
-        double dew = dewPoint(e[k]);
+        // Acima da altitude média da célula o ar é mais frio e satura antes: o vapor que
+        // excede a saturação já é nuvem, então o ponto de orvalho não passa da temperatura.
+        double dew = dewPoint(Math.min(e[k], es));
         double spd = Math.hypot(u[k], v[k]);
         return new ClimateSample(tLocal, p, clamp(e[k] / es, 0, 1), u[k], v[k], spd,
                 dew, cloudBase(tLocal, dew), cloud[k], type[k] == null ? CloudType.CLEAR : type[k],
