@@ -85,7 +85,10 @@ public final class CloudRenderer {
         ps.pushPose();
         // A malha foi montada relativa à câmera daquele momento; o vento a desloca desde então.
         ps.translate(builtCamX - cam.x + (offX - builtOffX), builtCamY - cam.y, builtCamZ - cam.z + (offZ - builtOffZ));
-        var pose = ps.last().pose();
+        // No 1.21.1 o PoseStack do evento vem sem a rotação da câmera: ela está na matriz
+        // model-view do RenderSystem. O VertexBuffer substitui essa matriz pela que receber,
+        // então é preciso combinar as duas; senão as nuvens giram junto com a câmera.
+        var pose = new org.joml.Matrix4f(RenderSystem.getModelViewMatrix()).mul(ps.last().pose());
         var proj = ctx.projectionMatrix();
 
         RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
