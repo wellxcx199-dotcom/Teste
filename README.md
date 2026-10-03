@@ -133,7 +133,35 @@ e, quando uma nuvem troca de família (um estrato que vira cúmulo, por exemplo)
 desfaz antes de a nova se formar. O deslocamento com o vento também é contínuo, sem o
 pequeno salto que havia a cada pacote novo.
 
+Nuvens convectivas novas brotam das vizinhas. Uma célula que deve virar cúmulo espera até
+uma vizinha ter uma torre de verdade (uns 13 blocos, ou 8 se a vizinha estiver a barlavento,
+porque a frente de rajada avança com o vento) e então nasce colada no flanco dela, no mesmo
+nível de condensação, afastando-se para o próprio centro conforme cresce. Só células isoladas
+nascem sozinhas, depois de uma espera curta, e numa fileira as pontas são as primeiras
+sementes. O resultado é o desenvolvimento em degraus de uma linha de instabilidade: torres
+mais velhas e altas de um lado, mais novas e baixas do outro, até a linha se fechar sob uma
+única bigorna. Num aglomerado, a torre principal é a mais velha, então ela não pula de
+célula enquanto as vizinhas a alcançam.
+
+![Formação de uma linha de instabilidade](docs/etapas-linha-instabilidade.jpg)
+
+A animação está em [docs/linha-instabilidade.gif](docs/linha-instabilidade.gif); a
+`/climavitrine` monta uma linha de 15 células mais ao norte (o céu limpa por uns 12 s antes
+de as nuvens da vitrine começarem a nascer).
+
 ![Evolução de um cumulonimbo](docs/etapas-cumulonimbo.jpg)
+
+### Proporções reais
+
+A espessura das nuvens vem do servidor comprimida a 100 m por bloco, e a largura das nuvens
+convectivas agora usa a mesma escala, de modo que a relação entre largura e altura é a real.
+Um cúmulo de bom tempo tem uns 13×6 blocos (1,3 × 0,6 km); um congesto, 35×45; a torre de um
+cumulonimbo, de 55 a 110 blocos de largura por ~90 de altura, com lados quase verticais até a
+bigorna; e a bigorna, de 200 a 400 blocos, grossa junto à torre, fina nas bordas e esticada
+para onde sopra o vento em altitude. As torres alargam conforme crescem, então o cúmulo vira
+congesto e depois cumulonimbo sem saltos de tamanho.
+
+![Proporções do cumulonimbo, antes e agora](docs/cumulonimbo-proporcoes.jpg)
 
 A animação completa está em [docs/evolucao_cumulonimbo.gif](docs/evolucao_cumulonimbo.gif)
 (rode `/climavitrine` para ver a sequência no jogo).
@@ -203,7 +231,7 @@ src/main/java/br/climate/mod/    Integração com o servidor
 src/client/java/br/climate/client/  Parte visual (só no cliente)
   ClimateClient, ClientClimate   recebem o pacote e suavizam chuva, trovoada e neblina
   ClimateHud                     painel do tempo na tela (tecla K)
-  CloudField, CloudInput         animação das nuvens (crescimento, bigorna, transparência, vento)
+  CloudField, CloudInput         animação das nuvens (crescimento, brotamento, bigorna, transparência, vento)
   CloudShapes, CloudRenderer      formas em voxel de cada tipo de nuvem e o desenho com texturas
   ClimateShowcase                comando /climavitrine
   ClimateMapScreen               tela do mapa-radar (tecla M)

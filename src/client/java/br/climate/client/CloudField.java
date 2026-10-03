@@ -18,7 +18,11 @@ import java.util.Map;
  * - camadas (estratos, nimbostratos) e cirros surgem e somem por transparência, engrossando
  *   ou afinando aos poucos;
  * - se o tipo muda de família (por exemplo, estrato vira cúmulo), a nuvem antiga se desfaz
- *   antes de a nova começar a se formar.
+ *   antes de a nova começar a se formar;
+ * - nuvens convectivas novas "brotam" das vizinhas: uma célula que deve virar cúmulo espera
+ *   até uma vizinha ter uma torre de verdade e então nasce colada no flanco dela (como na
+ *   linha de instabilidade, em que a frente de rajada de cada célula dispara a próxima). Só
+ *   células isoladas nascem sozinhas, depois de uma espera curta.
  *
  * O deslocamento com o vento é contínuo: quando chega um pacote novo (com as nuvens já
  * transportadas pelo servidor), o deslocamento acumulado não volta a zero de repente, ele é
@@ -36,11 +40,23 @@ final class CloudField {
     /** Ticks em que o deslocamento antigo é "devolvido" após um pacote novo. */
     private static final float CARRY = 160;
 
+    /** Altura (blocos) que a torre vizinha precisa ter para disparar uma célula nova; menor a sotavento. */
+    private static final float SPARK = 13, SPARK_DOWNWIND = 8;
+
     private static final class Cell {
+        final int cx, cz;
         CloudType shown = CloudType.CLEAR, target = CloudType.CLEAR;
         float cover, targetCover, base, targetBase, height, targetHeight;
         float opacity, anvil, anvilTop, boil;
         boolean inPatch;
+        /** Ticks até a célula nascer sozinha (-1: não está esperando). */
+        int wait = -1;
+        /** Tick em que a torre começou a crescer: a mais velha de um aglomerado é a principal. */
+        long born;
+        /** Direção da vizinha de onde a célula brotou (-1, 0 ou 1 em x e z). */
+        int fromX, fromZ;
+
+        Cell(int cx, int cz) { this.cx = cx; this.cz = cz; }
     }
 
     private static final Map<Long, Cell> cells = new HashMap<>();
@@ -49,9 +65,16 @@ final class CloudField {
     private static double carryX, carryZ;
     private static boolean animating;
 
+    /** Alvo agendado (a vitrine espera o céu limpar) e ticks que faltam para aplicá-lo. */
+    private static ClimatePayload later;
+    private static int laterIn;
+
+    static void setTargetLater(ClimatePayload p, int ticks) { later = p; laterIn = ticks; }
+
     static void clear() {
         cells.clear();
         target = null;
+        later = null;
         carryX = carryZ = 0;
     }
 
@@ -75,6 +98,7 @@ final class CloudField {
 
     /** Novo alvo (pacote do servidor ou vitrine). */
     static void setTarget(ClimatePayload p) {
+        later = null;
         if (p == null) return;
         boolean instant = cells.isEmpty();
         if (target != null) {
@@ -99,10 +123,11 @@ final class CloudField {
                 Cell c = cells.get(k);
                 if (c == null) {
                     if (t == CloudType.CLEAR) continue;           // nada a animar
-                    c = new Cell();
+                    c = new Cell(cx0 + i, cz0 + j);
                     cells.put(k, c);
-                    if (instant) { c.shown = t; c.opacity = 1; c.anvil = t == CloudType.CUMULONIMBUS ? 1 : 0; }
+                    if (instant) { c.shown = t; c.opacity = 1; c.anvil = t == CloudType.CUMULONIMBUS ? 1 : 0; c.born = time; }
                 }
+                if (family(t) != Family.CONVECTIVE) c.wait = -1;
                 c.inPatch = true;
                 c.target = t;
                 c.targetCover = (p.cover()[idx] & 0xFF) / 255f;
@@ -113,10 +138,47 @@ final class CloudField {
                     c.anvilTop = c.base + c.height;
                 }
             }
+        if (!instant) scheduleSprouts();
+    }
+
+    /**
+     * Células que vão virar cúmulo ganham um prazo para nascer sozinhas. Quem tem vizinhas
+     * convectivas dos dois lados espera bastante, porque o normal é ser disparada por elas antes
+     * disso; as pontas de uma linha (uma vizinha só) esperam pouco e são as primeiras sementes.
+     */
+    private static void scheduleSprouts() {
+        for (Cell c : cells.values()) {
+            if (c.wait >= 0 || family(c.target) != Family.CONVECTIVE || family(c.shown) == Family.CONVECTIVE) continue;
+            int n = 0;
+            for (int dz = -1; dz <= 1; dz++)
+                for (int dx = -1; dx <= 1; dx++) {
+                    if (dx == 0 && dz == 0) continue;
+                    Cell o = cells.get(key(c.cx + dx, c.cz + dz));
+                    if (o != null && family(o.target) == Family.CONVECTIVE) n++;
+                }
+            double r = CloudShapes.rnd(c.cx, c.cz, (int) (time / 200));
+            c.wait = (int) (n == 0 ? 40 + 160 * r : n == 1 ? 60 + 140 * r : 400 + 800 * r);
+        }
+    }
+
+    /** Vizinha com torre alta o bastante para disparar a célula, ou null. */
+    private static Cell parent(Cell c) {
+        Cell best = null;
+        for (int dz = -1; dz <= 1; dz++)
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dz == 0) continue;
+                Cell o = cells.get(key(c.cx + dx, c.cz + dz));
+                if (o == null || family(o.shown) != Family.CONVECTIVE || o.opacity < 0.4f) continue;
+                // A frente de rajada avança com o vento: a sotavento a célula nasce mais cedo.
+                boolean downwind = -dx * target.driftX() - dz * target.driftZ() > 0;
+                if (o.height >= (downwind ? SPARK_DOWNWIND : SPARK) && (best == null || o.height > best.height)) best = o;
+            }
+        return best;
     }
 
     /** Avança a animação um tick. */
     static void tick() {
+        if (later != null && --laterIn <= 0) setTarget(later);
         time++;
         sinceTarget++;
         boolean moving = false;
@@ -141,6 +203,13 @@ final class CloudField {
             c.anvil = Math.max(0, c.anvil - 1 / ANVIL_IN);
             c.boil = approach(c.boil, 0, 0.01f);
         } else if (have != want) {
+            // Convectivas brotam de uma vizinha já desenvolvida (ou nascem sozinhas no fim da espera).
+            Cell from = null;
+            if (want == Family.CONVECTIVE && c.wait >= 0) {
+                from = parent(c);
+                if (from == null && --c.wait > 0) return false;
+                c.wait = -1;
+            }
             // Começa a nova nuvem do zero: convectivas nascem como um cúmulo achatado.
             c.shown = c.target;
             c.opacity = 0;
@@ -149,6 +218,15 @@ final class CloudField {
             c.height = want == Family.CONVECTIVE ? 3 : Math.max(1, c.targetHeight * 0.5f);
             c.anvil = 0;
             c.anvilTop = c.base + c.height;
+            c.born = time;
+            c.fromX = c.fromZ = 0;
+            if (from != null) {
+                // Nasce no nível de condensação da vizinha, pequena e colada no flanco dela.
+                c.base = from.base;
+                c.cover = Math.min(c.targetCover, 0.3f);
+                c.fromX = Integer.signum(from.cx - c.cx);
+                c.fromZ = Integer.signum(from.cz - c.cz);
+            }
             if (want == Family.NONE) c.shown = CloudType.CLEAR;
         } else if (want != Family.NONE) {
             float fadeIn = want == Family.CONVECTIVE ? FADE_CONVECTIVE : want == Family.LAYER ? FADE_LAYER : FADE_CIRRUS;
@@ -207,7 +285,9 @@ final class CloudField {
         int size = p.size(), n = size * size;
         byte[] types = new byte[n], cover = new byte[n];
         short[] base = new short[n], top = new short[n], anvilTop = new short[n];
-        float[] opacity = new float[n], anvil = new float[n], boil = new float[n];
+        float[] opacity = new float[n], anvil = new float[n], boil = new float[n], grow = new float[n];
+        int[] born = new int[n];
+        byte[] from = new byte[n];
         int cx0 = Math.floorDiv(p.originX(), p.cellBlocks()), cz0 = Math.floorDiv(p.originZ(), p.cellBlocks());
         for (int j = 0; j < size; j++)
             for (int i = 0; i < size; i++) {
@@ -222,9 +302,12 @@ final class CloudField {
                 opacity[idx] = smooth(c.opacity);
                 anvil[idx] = c.anvil;
                 boil[idx] = c.boil;
+                born[idx] = (int) c.born + 1;
+                from[idx] = (byte) ((c.fromX + 1) * 3 + c.fromZ + 1);
+                grow[idx] = Math.min(1, c.height / Math.max(1, c.targetHeight));
             }
         return new CloudInput(p.originX(), p.originZ(), p.cellBlocks(), size, types, cover, base, top,
-                opacity, anvil, anvilTop, boil, p.storms(), p.driftX(), p.driftZ(), p.refY(), time);
+                opacity, anvil, anvilTop, boil, born, from, grow, p.storms(), p.driftX(), p.driftZ(), p.refY(), time);
     }
 
     private static float smooth(float x) { return x * x * (3 - 2 * x); }

@@ -59,9 +59,15 @@ public final class ClientClimate {
 
     static ClimatePayload showcase() { return showcase; }
 
-    static void setShowcase(ClimatePayload p) {
+    /**
+     * Liga (p != null) ou desliga a vitrine. Ao ligar, o céu limpa primeiro (alvo vazio) e só
+     * depois as nuvens da vitrine começam a nascer, para o ciclo de vida aparecer inteiro.
+     */
+    static void setShowcase(ClimatePayload p, ClimatePayload clearSky) {
         showcase = p;
-        CloudField.setTarget(p != null ? p : latest);
+        if (p == null) { CloudField.setTarget(latest); return; }
+        CloudField.setTarget(clearSky);
+        CloudField.setTargetLater(p, ClimateShowcase.CLEAR_TICKS);
     }
 
     /** Há nuvens para desenhar (simuladas ou da vitrine). */
