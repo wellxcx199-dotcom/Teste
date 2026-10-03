@@ -118,6 +118,26 @@ de imagens. Elas são quase brancas porque a cor vem da hora do dia e do tipo de
 
 ![Texturas das nuvens](docs/texturas-nuvens.png)
 
+### Nuvens que evoluem
+
+As nuvens não aparecem nem somem de repente. O servidor manda o estado das nuvens a cada
+passo da simulação (10 s), e o cliente trata esse estado como um alvo, levando cada célula
+até ele no ritmo do seu tipo. Cúmulos nascem como um tufo achatado e translúcido e crescem
+para cima a cerca de 1 bloco por segundo, com o topo "fervendo" (bolhas que sobem e mudam
+de forma) enquanto a corrente ascendente está ativa. Se o alvo é um cumulonimbo, a torre
+continua subindo e só abre a bigorna quando chega perto do topo, como quando a nuvem bate
+na tropopausa. A bigorna se espalha ao longo de uns 20 s. Na dissipação acontece o contrário:
+a torre desaba primeiro e a bigorna, já sem alimentação, fica flutuando e se desfaz devagar.
+Estratos e nimbostratos se condensam e se dissolvem por transparência ao longo de uns 20 s,
+e, quando uma nuvem troca de família (um estrato que vira cúmulo, por exemplo), a antiga se
+desfaz antes de a nova se formar. O deslocamento com o vento também é contínuo, sem o
+pequeno salto que havia a cada pacote novo.
+
+![Evolução de um cumulonimbo](docs/etapas-cumulonimbo.jpg)
+
+A animação completa está em [docs/evolucao_cumulonimbo.gif](docs/evolucao_cumulonimbo.gif)
+(rode `/climavitrine` para ver a sequência no jogo).
+
 ## Configuração
 
 Na primeira vez que o mundo abre, o mod cria `config/climamod.json`. Ele é lido toda vez
@@ -183,6 +203,7 @@ src/main/java/br/climate/mod/    Integração com o servidor
 src/client/java/br/climate/client/  Parte visual (só no cliente)
   ClimateClient, ClientClimate   recebem o pacote e suavizam chuva, trovoada e neblina
   ClimateHud                     painel do tempo na tela (tecla K)
+  CloudField, CloudInput         animação das nuvens (crescimento, bigorna, transparência, vento)
   CloudShapes, CloudRenderer      formas em voxel de cada tipo de nuvem e o desenho com texturas
   ClimateShowcase                comando /climavitrine
   ClimateMapScreen               tela do mapa-radar (tecla M)

@@ -28,6 +28,7 @@ public final class ClientClimate {
     public static void accept(ClimatePayload p) {
         latest = p;
         ticksSince = 0;
+        if (showcase == null) CloudField.setTarget(p);    // as nuvens evoluem até o novo estado
     }
 
     public static void reset() {
@@ -37,6 +38,7 @@ public final class ClientClimate {
         insideCloud = false;
         showcase = null;
         map = null;
+        CloudField.clear();
     }
 
     public static boolean active() {
@@ -57,7 +59,10 @@ public final class ClientClimate {
 
     static ClimatePayload showcase() { return showcase; }
 
-    static void setShowcase(ClimatePayload p) { showcase = p; }
+    static void setShowcase(ClimatePayload p) {
+        showcase = p;
+        CloudField.setTarget(p != null ? p : latest);
+    }
 
     /** Há nuvens para desenhar (simuladas ou da vitrine). */
     public static boolean cloudsActive() { return showcase != null || active(); }
@@ -69,6 +74,7 @@ public final class ClientClimate {
     public static long ticksSince() { return ticksSince; }
 
     public static void tick() {
+        if (CloudField.hasTarget()) CloudField.tick();
         if (latest == null) return;
         if (ticksSince != Long.MAX_VALUE) ticksSince++;
         rainO = rain; thunderO = thunder; fogO = fog;

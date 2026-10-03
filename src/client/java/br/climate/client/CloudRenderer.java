@@ -2,7 +2,6 @@ package br.climate.client;
 
 import br.climate.core.CloudType;
 import br.climate.mod.ClimateMod;
-import br.climate.mod.ClimatePayload;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
@@ -53,7 +52,7 @@ public final class CloudRenderer {
     private static VertexBuffer solid, glass;
     private static boolean solidEmpty = true, glassEmpty = true;
     private static ByteBufferBuilder solidBytes, glassBytes;
-    private static ClimatePayload builtFor;
+    private static CloudInput builtFor;
     private static double builtCamX, builtCamY, builtCamZ, builtOffX, builtOffZ;
     private static long builtAt = Long.MIN_VALUE;
     private static boolean builtInside;
@@ -64,16 +63,20 @@ public final class CloudRenderer {
         if (level == null || level.dimension() != Level.OVERWORLD || !ClientClimate.cloudsActive()) return;
         // Respeita a opção de vídeo "Nuvens: Desligadas".
         if (Minecraft.getInstance().options.getCloudsType() == CloudStatus.OFF) return;
-        ClimatePayload p = ClientClimate.cloudSource();
+        if (!CloudField.hasTarget()) return;
 
         Vec3 cam = ctx.camera().getPosition();
         float pt = ctx.tickCounter().getGameTimeDeltaPartialTick(false);
-        double t = Math.min(ClientClimate.ticksSince(), 20 * 60) + pt;
-        double offX = p.driftX() * t, offZ = p.driftZ() * t;
+        double[] off = CloudField.offset(pt);                 // deslocamento contínuo pelo vento
+        double offX = off[0], offZ = off[1];
 
+        // Nuvens em evolução: malha refeita a cada 8 ticks (0,4 s); paradas, a cada 40.
         long now = level.getGameTime();
         double moved = Math.max(Math.abs(cam.x - builtCamX), Math.max(Math.abs(cam.y - builtCamY), Math.abs(cam.z - builtCamZ)));
-        if (p != builtFor || moved > 4 || now - builtAt > 40 || now < builtAt) {
+        int interval = CloudField.animating() ? 8 : 40;
+        if (builtFor == null || moved > 4 || now - builtAt >= interval || now < builtAt) {
+            CloudInput p = CloudField.snapshot();
+            if (p == null) return;
             rebuild(p, level, cam, offX, offZ, pt);
             builtFor = p; builtAt = now;
             builtCamX = cam.x; builtCamY = cam.y; builtCamZ = cam.z; builtOffX = offX; builtOffZ = offZ;
@@ -125,7 +128,7 @@ public final class CloudRenderer {
     /** Cor, transparência e destino (malha sólida ou translúcida) de um trecho de nuvem. */
     private record Look(float r, float g, float b, float a, boolean glass) {}
 
-    private static void rebuild(ClimatePayload p, ClientLevel level, Vec3 cam, double offX, double offZ, float pt) {
+    private static void rebuild(CloudInput p, ClientLevel level, Vec3 cam, double offX, double offZ, float pt) {
         if (solid == null) {
             solid = new VertexBuffer(VertexBuffer.Usage.STATIC);
             glass = new VertexBuffer(VertexBuffer.Usage.STATIC);
@@ -150,7 +153,8 @@ public final class CloudRenderer {
                     if (mat == CloudShapes.EMPTY) continue;
                     float y0 = layer == 0 ? s.y0a[k] : s.y0b[k], y1 = layer == 0 ? s.y1a[k] : s.y1b[k];
                     double x0 = cx + gx * s.colW, z0 = cz + gz * s.colW, x1 = x0 + s.colW, z1 = z0 + s.colW;
-                    Look look = look(TYPES[mat], layer == 1, cam, x0, y0, z0, x1, y1, z1, radius, tint, fog);
+                    float op = layer == 0 ? s.opA[k] : s.opB[k];
+                    Look look = look(TYPES[mat], layer == 1, cam, x0, y0, z0, x1, y1, z1, radius, tint, fog, op);
                     if (look == null) continue;
                     emitColumn(look.glass() ? gb : sb, s, k, gx, gz, layer, TYPES[mat], y0, y1, x0, z0, x1, z1, look, cam);
                 }
@@ -162,7 +166,7 @@ public final class CloudRenderer {
             double x0 = cx + gx * s.colW, z0 = cz + gz * s.colW, x1 = x0 + s.colW, z1 = z0 + s.colW;
             double dist = Math.hypot((x0 + x1) / 2 - cam.x, (z0 + z1) / 2 - cam.z);
             if (dist > radius * 0.9) continue;
-            float a = 0.75f * (float) Math.min(1, (radius * 0.9 - dist) / (0.2 * radius));
+            float a = 0.75f * s.rainOp.get(q) * (float) Math.min(1, (radius * 0.9 - dist) / (0.2 * radius));
             float c = (float) (0.85 * tint.x);
             rainQuad(gb, cam, x0, z0, x1, z1, top, c, a);
             rainQuad(gb, cam, x0, z1, x1, z0, top, c, a);
@@ -183,7 +187,7 @@ public final class CloudRenderer {
     }
 
     private static Look look(CloudType type, boolean anvil, Vec3 cam, double x0, double y0, double z0,
-                             double x1, double y1, double z1, double radius, Vec3 tint, float[] fog) {
+                             double x1, double y1, double z1, double radius, Vec3 tint, float[] fog, float opacity) {
         float base, a;
         boolean translucent = false;
         switch (type) {
@@ -208,7 +212,8 @@ public final class CloudRenderer {
         float r = Mth.lerp(haze, (float) (base * tint.x), fog[0]);
         float g = Mth.lerp(haze, (float) (base * tint.y), fog[1]);
         float b = Mth.lerp(haze, (float) (base * tint.z), fog[2]);
-        return new Look(r, g, b, a * fade, translucent || fade < 0.98f);
+        // Opacidade da animação: nuvens surgindo ou se desfazendo vão para a malha translúcida.
+        return new Look(r, g, b, a * fade * opacity, translucent || fade * opacity < 0.98f);
     }
 
     /** Topo, base e as laterais expostas (não cobertas pelas colunas vizinhas) de um trecho. */
