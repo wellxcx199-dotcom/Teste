@@ -131,7 +131,9 @@ a torre desaba primeiro e a bigorna, já sem alimentação, fica flutuando e se 
 Estratos e nimbostratos se condensam e se dissolvem por transparência ao longo de uns 20 s,
 e, quando uma nuvem troca de família (um estrato que vira cúmulo, por exemplo), a antiga se
 desfaz antes de a nova se formar. O deslocamento com o vento também é contínuo, sem o
-pequeno salto que havia a cada pacote novo.
+pequeno salto que havia a cada pacote novo. Quando o vento leva uma nuvem para a célula
+vizinha, o estado da animação vai junto: um cumulonimbo que viaja continua crescendo, em vez
+de desmoronar numa célula e renascer do zero na outra.
 
 Nuvens convectivas novas brotam das vizinhas. Uma célula que deve virar cúmulo espera até
 uma vizinha ter uma torre de verdade (uns 13 blocos, ou 8 se a vizinha estiver a barlavento,

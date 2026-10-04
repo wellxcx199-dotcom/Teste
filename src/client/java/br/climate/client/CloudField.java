@@ -24,6 +24,11 @@ import java.util.Map;
  *   linha de instabilidade, em que a frente de rajada de cada célula dispara a próxima). Só
  *   células isoladas nascem sozinhas, depois de uma espera curta.
  *
+ * O servidor transporta as nuvens com o vento, e a nuvem "pula" para a célula vizinha quando
+ * a água condensada passa de uma para a outra. Nesse caso o estado da animação vai junto
+ * (ver {@link #followWind} e {@link #carryAlong}): uma nuvem que só mudou de lugar não
+ * desmorona numa célula para renascer do zero na outra.
+ *
  * O deslocamento com o vento é contínuo: quando chega um pacote novo (com as nuvens já
  * transportadas pelo servidor), o deslocamento acumulado não volta a zero de repente, ele é
  * "devolvido" aos poucos enquanto as células se ajustam ao novo estado.
@@ -44,7 +49,7 @@ final class CloudField {
     private static final float SPARK = 13, SPARK_DOWNWIND = 8;
 
     private static final class Cell {
-        final int cx, cz;
+        int cx, cz;
         CloudType shown = CloudType.CLEAR, target = CloudType.CLEAR;
         float cover, targetCover, base, targetBase, height, targetHeight;
         float opacity, anvil, anvilTop, boil;
@@ -100,7 +105,9 @@ final class CloudField {
     static void setTarget(ClimatePayload p) {
         later = null;
         if (p == null) return;
-        boolean instant = cells.isEmpty();
+        // Só o primeiro alvo (entrada no mundo) aparece pronto; céu limpo na memória não conta,
+        // senão a primeira nuvem de um dia limpo surgiria inteira de uma vez.
+        boolean instant = target == null;
         if (target != null) {
             double[] off = offset(0);
             carryX = off[0];
@@ -111,9 +118,10 @@ final class CloudField {
         }
         target = p;
         sinceTarget = 0;
-        for (Cell c : cells.values()) { c.inPatch = false; c.target = CloudType.CLEAR; c.targetCover = 0; }
         int cx0 = Math.floorDiv(p.originX(), p.cellBlocks()), cz0 = Math.floorDiv(p.originZ(), p.cellBlocks());
         CloudType[] types = CloudType.values();
+        if (!instant) followWind(p, types, cx0, cz0);
+        for (Cell c : cells.values()) { c.inPatch = false; c.target = CloudType.CLEAR; c.targetCover = 0; }
         for (int j = 0; j < p.size(); j++)
             for (int i = 0; i < p.size(); i++) {
                 int idx = j * p.size() + i;
@@ -138,7 +146,91 @@ final class CloudField {
                     c.anvilTop = c.base + c.height;
                 }
             }
-        if (!instant) scheduleSprouts();
+        if (!instant) {
+            carryAlong();
+            scheduleSprouts();
+        }
+    }
+
+    /**
+     * O campo de nuvens inteiro andou com o vento? Compara o que está sendo mostrado com o novo
+     * alvo deslocado de -1, 0 ou +1 célula em cada eixo e, se algum deslocamento casa claramente
+     * melhor que ficar parado, move todas as células juntas. Isso mantém inteiras as nuvens de
+     * várias células, que a troca entre vizinhas ({@link #carryAlong}) não alcança.
+     */
+    private static void followWind(ClimatePayload p, CloudType[] types, int cx0, int cz0) {
+        int size = p.size(), bestX = 0, bestZ = 0, best = -1, still = 0;
+        for (int sz = -1; sz <= 1; sz++)
+            for (int sx = -1; sx <= 1; sx++) {
+                int score = 0;
+                for (int j = 0; j < size; j++)
+                    for (int i = 0; i < size; i++) {
+                        Family want = family(types[p.types()[j * size + i]]);
+                        if (want == Family.NONE) continue;
+                        Cell o = cells.get(key(cx0 + i - sx, cz0 + j - sz));
+                        if (o != null && o.opacity > 0.05f && family(o.shown) == want) score++;
+                    }
+                // Empate: fica o deslocamento a favor do vento (ou nenhum).
+                score = score * 4 + (int) Math.signum(sx * p.driftX() + sz * p.driftZ()) + (sx == 0 && sz == 0 ? 1 : 0);
+                if (sx == 0 && sz == 0) still = score;
+                if (score > best) { best = score; bestX = sx; bestZ = sz; }
+            }
+        // Só move se casar claramente melhor: ao menos uma célula a mais e 10% a mais que parado.
+        int gain = best / 4 - still / 4;
+        if ((bestX == 0 && bestZ == 0) || gain < Math.max(1, still / 40)) return;
+        Map<Long, Cell> moved = new HashMap<>();
+        for (Cell c : cells.values()) {
+            c.cx += bestX;
+            c.cz += bestZ;
+            moved.put(key(c.cx, c.cz), c);
+        }
+        cells.clear();
+        cells.putAll(moved);
+    }
+
+    /**
+     * Nuvens levadas pelo vento: se uma célula precisa de uma nuvem que ainda não mostra e uma
+     * vizinha está perdendo uma nuvem da mesma família, é a mesma nuvem que mudou de lugar. As
+     * duas trocam de estado visual (a nuvem segue crescendo na célula nova). A vizinha a
+     * barlavento, de onde o vento traz a nuvem, tem preferência.
+     */
+    private static void carryAlong() {
+        double dl = Math.hypot(target.driftX(), target.driftZ());
+        double wx = dl > 1e-6 ? target.driftX() / dl : 0, wz = dl > 1e-6 ? target.driftZ() / dl : 0;
+        for (Cell c : cells.values()) {
+            Family want = family(c.target);
+            if (!c.inPatch || want == Family.NONE || family(c.shown) == want) continue;
+            Cell best = null;
+            double bestScore = 0;
+            for (int dz = -1; dz <= 1; dz++)
+                for (int dx = -1; dx <= 1; dx++) {
+                    if (dx == 0 && dz == 0) continue;
+                    Cell o = cells.get(key(c.cx + dx, c.cz + dz));
+                    if (o == null || family(o.shown) != want || family(o.target) == want || o.opacity < 0.05f) continue;
+                    // (-dx, -dz) aponta da vizinha para a célula: alinhado com o vento = barlavento.
+                    double score = o.opacity + 0.5 * (-dx * wx - dz * wz) / Math.hypot(dx, dz);
+                    if (best == null || score > bestScore) { best = o; bestScore = score; }
+                }
+            if (best != null) swapLook(c, best);
+        }
+    }
+
+    private static void swapLook(Cell a, Cell b) {
+        CloudType t = a.shown; a.shown = b.shown; b.shown = t;
+        float f;
+        f = a.cover; a.cover = b.cover; b.cover = f;
+        f = a.base; a.base = b.base; b.base = f;
+        f = a.height; a.height = b.height; b.height = f;
+        f = a.opacity; a.opacity = b.opacity; b.opacity = f;
+        f = a.anvil; a.anvil = b.anvil; b.anvil = f;
+        f = a.anvilTop; a.anvilTop = b.anvilTop; b.anvilTop = f;
+        f = a.boil; a.boil = b.boil; b.boil = f;
+        long l = a.born; a.born = b.born; b.born = l;
+        int i = a.wait; a.wait = b.wait; b.wait = i;
+        i = a.fromX; a.fromX = b.fromX; b.fromX = i;
+        i = a.fromZ; a.fromZ = b.fromZ; b.fromZ = i;
+        if (family(a.shown) == family(a.target)) a.wait = -1;
+        if (family(b.shown) == family(b.target)) b.wait = -1;
     }
 
     /**

@@ -39,6 +39,7 @@ public final class ClientClimate {
         showcase = null;
         map = null;
         CloudField.clear();
+        CloudRenderer.invalidate();
     }
 
     public static boolean active() {

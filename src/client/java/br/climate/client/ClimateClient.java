@@ -14,7 +14,8 @@ public final class ClimateClient implements ClientModInitializer {
     public void onInitializeClient() {
         ClientPlayNetworking.registerGlobalReceiver(ClimatePayload.TYPE, (payload, ctx) -> ClientClimate.accept(payload));
         ClientPlayNetworking.registerGlobalReceiver(br.climate.mod.MapPayload.TYPE, (payload, ctx) -> ClientClimate.setMap(payload));
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientClimate.reset());
+        // O DISCONNECT pode vir da thread de rede; o estado das nuvens só é mexido na thread principal.
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(ClientClimate::reset));
         ClimateHud.register();
         ClimateShowcase.register();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {

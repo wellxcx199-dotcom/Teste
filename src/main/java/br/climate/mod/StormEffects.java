@@ -40,8 +40,11 @@ final class StormEffects {
     }
 
     private static void tornado(ServerLevel level, Storm t, ClimateSettings.Mod opt, long time) {
-        // Posição entre passos da simulação: anda com a velocidade do último passo.
-        double x = t.x, z = t.z;
+        // Posição entre passos da simulação: anda com a velocidade do último passo (vx, vz em
+        // blocos por hora de jogo = 1000 ticks), a mesma estimativa que o cliente usa para
+        // desenhar o funil. Sem isso os efeitos ficavam até ~10 blocos atrás do funil visível.
+        long since = ClimateMod.ticksSinceStep(level);
+        double x = t.x + t.vx / 1000.0 * since, z = t.z + t.vz / 1000.0 * since;
         if (!level.hasChunkAt(BlockPos.containing(x, 0, z))) return;
         int ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, (int) Math.floor(x), (int) Math.floor(z));
         double r = funnelRadius(t.category());
@@ -65,6 +68,7 @@ final class StormEffects {
             for (int i = 0; i < tries; i++) {
                 double a = rnd.nextDouble() * Math.PI * 2, d = Math.sqrt(rnd.nextDouble()) * r * 1.6;
                 int bx = (int) Math.floor(x + Math.cos(a) * d), bz = (int) Math.floor(z + Math.sin(a) * d);
+                if (!level.hasChunkAt(new BlockPos(bx, 0, bz))) continue;   // não força carregar chunks
                 BlockPos top = level.getHeightmapPos(Heightmap.Types.WORLD_SURFACE, new BlockPos(bx, 0, bz)).below();
                 for (BlockPos pos : new BlockPos[] {top, top.above()}) {
                     if (pos.getY() > ground + 40) continue;

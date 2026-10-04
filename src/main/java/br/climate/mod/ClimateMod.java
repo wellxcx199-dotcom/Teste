@@ -428,14 +428,18 @@ public final class ClimateMod implements ModInitializer {
                 (float) s.windSpeed(), (float) s.windFromDeg(), (float) s.precipMmH(),
                 (byte) s.cloud().ordinal(), s.thunder(), (float) s.latitudeDeg(),
                 (float) (s.windEast() * perTick), (float) (-s.windNorth() * perTick),
-                ocx * cb, ocz * cb, cb, size, types, cover, base, top, stormsNear(p.getX(), p.getZ(), 1500)));
+                ocx * cb, ocz * cb, cb, size, types, cover, base, top,
+                stormsNear(p.getX(), p.getZ(), 1500, ticksSinceStep(level))));
     }
 
-    private static List<StormInfo> stormsNear(double x, double z, double range) {
+    /** Ticks desde o último passo da simulação (os passos caem nos múltiplos de stepTicks). */
+    static long ticksSinceStep(ServerLevel level) { return Math.floorMod(level.getGameTime(), opt.stepTicks); }
+
+    private static List<StormInfo> stormsNear(double x, double z, double range, long ahead) {
         List<StormInfo> out = new java.util.ArrayList<>();
         for (Storm s : grid.storms.storms)
             if (Math.hypot(s.x - x, s.z - z) < range + s.radiusM / cfg.metersPerBlockH() * 6 && out.size() < 64)
-                out.add(StormInfo.of(s, cfg.metersPerBlockH()));
+                out.add(StormInfo.of(s, cfg.metersPerBlockH(), ahead));
         return out;
     }
 
@@ -463,7 +467,8 @@ public final class ClimateMod implements ModInitializer {
             ter[k] = MapPayload.encTerrain(grid.water[k], grid.elev[k]);
         }
         List<StormInfo> storms = new java.util.ArrayList<>();
-        for (Storm s : grid.storms.storms) if (storms.size() < 64) storms.add(StormInfo.of(s, cfg.metersPerBlockH()));
+        long ahead = ticksSinceStep(p.serverLevel());
+        for (Storm s : grid.storms.storms) if (storms.size() < 64) storms.add(StormInfo.of(s, cfg.metersPerBlockH(), ahead));
         ServerPlayNetworking.send(p, new MapPayload(grid.originCellX, grid.originCellZ, grid.nx, grid.nz, cfg.cellBlocks,
                 (float) cfg.halfRangeBlocks, t, pr, h, r, u, v, ct, cv, ter, storms));
     }

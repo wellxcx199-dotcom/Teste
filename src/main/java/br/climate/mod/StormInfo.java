@@ -18,9 +18,15 @@ public record StormInfo(int id, byte kind, float x, float z, float vmax, float r
 
     public Storm.Kind stormKind() { return Storm.Kind.values()[kind]; }
 
-    public static StormInfo of(Storm s, double metersPerBlock) {
+    /**
+     * @param aheadTicks ticks desde o último passo da simulação: a posição enviada já é a de
+     *                   agora, para o cliente (que conta o tempo a partir do pacote) e o servidor
+     *                   (que conta a partir do passo) concordarem onde está o fenômeno
+     */
+    public static StormInfo of(Storm s, double metersPerBlock, long aheadTicks) {
         // horas de jogo -> ticks: 1 hora = 1000 ticks
-        return new StormInfo(s.id, (byte) s.kind.ordinal(), (float) s.x, (float) s.z, (float) s.vmax,
+        double x = s.x + s.vx / 1000.0 * aheadTicks, z = s.z + s.vz / 1000.0 * aheadTicks;
+        return new StormInfo(s.id, (byte) s.kind.ordinal(), (float) x, (float) z, (float) s.vmax,
                 (float) (s.radiusM / metersPerBlock), (float) s.intensity(), (byte) s.category(),
                 (float) (s.vx / 1000.0), (float) (s.vz / 1000.0));
     }

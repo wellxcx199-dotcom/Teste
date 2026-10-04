@@ -57,6 +57,13 @@ public final class CloudRenderer {
     private static long builtAt = Long.MIN_VALUE;
     private static boolean builtInside;
 
+    /** Esquece a malha montada (troca de mundo): a próxima imagem monta outra do zero. */
+    static void invalidate() {
+        builtFor = null;
+        builtAt = Long.MIN_VALUE;
+        solidEmpty = glassEmpty = true;
+    }
+
     public static void render(WorldRenderContext ctx) {
         ClientClimate.setInsideCloud(false);
         ClientLevel level = ctx.world();
