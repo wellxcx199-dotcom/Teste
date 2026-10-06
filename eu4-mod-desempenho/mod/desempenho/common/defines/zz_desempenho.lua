@@ -1,0 +1,12 @@
+-- Arquivo de sobrescrita de "defines" (constantes do motor do jogo).
+-- O EU4 carrega todos os .lua desta pasta depois do 00_defines.lua original,
+-- então basta reescrever apenas as linhas que você quer mudar.
+--
+-- COMO USAR:
+-- 1. Abra <pasta do jogo>/common/defines/00_defines.lua num editor de texto.
+-- 2. Procure (Ctrl+F) a constante que quer alterar e copie o nome EXATO.
+-- 3. Cole aqui no formato abaixo, tirando os dois traços "--" do começo.
+-- 4. Mude UM valor por vez e teste o jogo, anotando o resultado.
+--
+-- Exemplo de formato (confira o nome no seu 00_defines.lua antes de ativar):
+-- NDefines.NGame.END_DATE = "1700.1.1"
