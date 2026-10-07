@@ -1,0 +1,29 @@
+﻿l_english:
+ rmt_sortear_destino_title:0 "Consultar o Destino"
+ rmt_sortear_destino_desc:0 "Os conselheiros debatem qual deve ser o grande objetivo da nação. A escolha depende da nossa posição no mundo, mas a sorte também terá voz."
+ rmt_sortear_destino_tt:0 "Uma nova série de missões será sorteada de acordo com a região e a situação do país."
+
+ rmt_comercio_1_title:0 "Mercadores da Terra"
+ rmt_comercio_1_desc:0 "Controle ao menos 30% do comércio do seu nó comercial de origem."
+ rmt_comercio_2_title:0 "Senhores do Mercado"
+ rmt_comercio_2_desc:0 "Torne-se a maior potência comercial do seu nó de origem."
+ rmt_comercio_3_title:0 "Monopólio"
+ rmt_comercio_3_desc:0 "Controle 75% do comércio do seu nó de origem."
+
+ rmt_colonial_1_title:0 "Além do Horizonte"
+ rmt_colonial_1_desc:0 "Possua ao menos uma província nas Américas."
+ rmt_colonial_2_title:0 "Colônias Florescentes"
+ rmt_colonial_2_desc:0 "Possua 5 províncias nas Américas."
+ rmt_colonial_3_title:0 "Império Ultramarino"
+ rmt_colonial_3_desc:0 "Possua 15 províncias nas Américas."
+
+ rmt_unificacao_1_title:0 "Crescer em Poder"
+ rmt_unificacao_1_desc:0 "Aumente o desenvolvimento total do país em 50 desde o início do jogo."
+ rmt_unificacao_2_title:0 "Senhor da Região"
+ rmt_unificacao_2_desc:0 "Domine boa parte da região que você está destinado a unificar."
+ rmt_unificacao_3_title:0 "Uma Só Coroa"
+ rmt_unificacao_3_desc:0 "Forme a grande nação da sua região."
+
+ rmt_mercadores_audazes:0 "Mercadores Audazes"
+ rmt_febre_colonial:0 "Febre Colonial"
+ rmt_ambicao_unificadora:0 "Ambição Unificadora"

@@ -1,0 +1,14 @@
+# Bonus temporarios dados pelas missoes (ver add_country_modifier em rmt_missoes.txt).
+
+rmt_mercadores_audazes = {
+	global_trade_power = 0.10
+	trade_efficiency = 0.05
+}
+
+rmt_febre_colonial = {
+	global_colonial_growth = 15
+}
+
+rmt_ambicao_unificadora = {
+	core_creation = -0.15
+}
