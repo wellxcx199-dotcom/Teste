@@ -1,0 +1,179 @@
+# Efeitos com nome proprio. Os que recebem parametros usam $nome$,
+# que o jogo troca pelo valor passado na chamada, por exemplo:
+#   rmt_iniciar_destino = { destino = comercio }
+# vira set_country_flag = rmt_destino_comercio.
+
+# Sorteia UMA carta para o evento de escolha. A decisao chama isto 3 vezes.
+# Os modifier multiplicam o peso: factor = 0 elimina a carta, e uma carta
+# ja sorteada nesta rodada nao pode sair de novo.
+rmt_sortear_uma_oferta = {
+	random_list = {
+		# Carta vazia: so costuma sair quando nao sobra nenhum destino possivel.
+		1 = { }
+		100 = {
+			modifier = { factor = 0 NOT = { rmt_elegivel_comercio = yes } }
+			modifier = { factor = 0 has_country_flag = rmt_oferta_comercio }
+			modifier = { factor = 1.5 any_owned_province = { has_port = yes } }
+			modifier = { factor = 1.5 current_age = age_of_discovery }
+			set_country_flag = rmt_oferta_comercio
+		}
+		100 = {
+			modifier = { factor = 0 NOT = { rmt_elegivel_colonial = yes } }
+			modifier = { factor = 0 has_country_flag = rmt_oferta_colonial }
+			modifier = { factor = 2 current_age = age_of_discovery }
+			set_country_flag = rmt_oferta_colonial
+		}
+		300 = {	# peso maior: quem pode unificar quase sempre ve esta carta
+			modifier = { factor = 0 NOT = { rmt_elegivel_unificacao = yes } }
+			modifier = { factor = 0 has_country_flag = rmt_oferta_unificacao }
+			set_country_flag = rmt_oferta_unificacao
+		}
+		100 = {
+			modifier = { factor = 0 NOT = { rmt_elegivel_conquista = yes } }
+			modifier = { factor = 0 has_country_flag = rmt_oferta_conquista }
+			modifier = { factor = 1.5 current_age = age_of_absolutism }
+			modifier = {
+				factor = 1.5
+				any_neighbor_country = {
+					rmt_alvo_conquista_valido = yes
+					is_rival = ROOT
+				}
+			}
+			set_country_flag = rmt_oferta_conquista
+		}
+		100 = {
+			modifier = { factor = 0 NOT = { rmt_elegivel_fe = yes } }
+			modifier = { factor = 0 has_country_flag = rmt_oferta_fe }
+			modifier = { factor = 2 current_age = age_of_reformation }
+			modifier = { factor = 2 NOT = { religious_unity = 1 } }
+			modifier = { factor = 0.5 religious_unity = 1 }
+			set_country_flag = rmt_oferta_fe
+		}
+		100 = {
+			modifier = { factor = 0 NOT = { rmt_elegivel_suditos = yes } }
+			modifier = { factor = 0 has_country_flag = rmt_oferta_suditos }
+			modifier = { factor = 1.5 num_of_subjects = 1 }
+			set_country_flag = rmt_oferta_suditos
+		}
+	}
+}
+
+rmt_limpar_ofertas = {
+	clr_country_flag = rmt_oferta_comercio
+	clr_country_flag = rmt_oferta_colonial
+	clr_country_flag = rmt_oferta_unificacao
+	clr_country_flag = rmt_oferta_conquista
+	clr_country_flag = rmt_oferta_fe
+	clr_country_flag = rmt_oferta_suditos
+}
+
+# Chamado pela opcao escolhida no evento rmt_eventos.1.
+rmt_iniciar_destino = {
+	hidden_effect = {
+		rmt_limpar_ofertas = yes
+		set_country_flag = rmt_destino_$destino$
+	}
+	# Reavalia o potential das series de missoes. O jogo so faz isso no inicio
+	# da partida e quando este comando roda.
+	swap_non_generic_missions = yes
+}
+
+# Escolhe o alvo do destino de conquista olhando o mapa atual:
+# um vizinho rival, se houver; senao, qualquer vizinho que sirva de alvo.
+rmt_marcar_alvo_conquista = {
+	if = {
+		limit = {
+			any_neighbor_country = {
+				rmt_alvo_conquista_valido = yes
+				is_rival = ROOT
+			}
+		}
+		random_neighbor_country = {
+			limit = {
+				rmt_alvo_conquista_valido = yes
+				is_rival = ROOT
+			}
+			rmt_marcar_pais_alvo = yes
+		}
+	}
+	else = {
+		random_neighbor_country = {
+			limit = { rmt_alvo_conquista_valido = yes }
+			rmt_marcar_pais_alvo = yes
+		}
+	}
+}
+
+# Usado dentro do escopo do pais alvo.
+rmt_marcar_pais_alvo = {
+	set_country_flag = rmt_alvo_pais
+	every_owned_province = {
+		set_province_flag = rmt_alvo_conquista
+		add_claim = ROOT	# reivindicacao = motivo de guerra
+	}
+}
+
+rmt_limpar_alvo_conquista = {
+	every_country = {
+		limit = { has_country_flag = rmt_alvo_pais }
+		clr_country_flag = rmt_alvo_pais
+	}
+	every_province = {
+		limit = { has_province_flag = rmt_alvo_conquista }
+		clr_province_flag = rmt_alvo_conquista
+	}
+}
+
+# Chamado pela ultima missao de cada destino. A recompensa depende de quanto
+# tempo o capitulo levou, do tamanho do pais e de quantos capitulos ja foram.
+rmt_encerrar_capitulo = {
+	add_prestige = 25
+	add_years_of_income = 1	# ja cresce sozinho com a economia do pais
+	# Pressa: menos de 20 anos desde o sorteio.
+	if = {
+		limit = {
+			NOT = {
+				had_country_flag = {
+					flag = rmt_capitulo_ativo
+					days = 7300
+				}
+			}
+		}
+		add_prestige = 25
+		add_adm_power = 50
+		add_dip_power = 50
+		add_mil_power = 50
+	}
+	# Azarao: paises pequenos ganham um empurrao extra.
+	if = {
+		limit = { NOT = { total_development = 150 } }
+		add_stability = 1
+	}
+	change_variable = {
+		which = rmt_capitulos
+		value = 1
+	}
+	# A partir do terceiro capitulo cumprido, a nacao ganha fama de predestinada.
+	if = {
+		limit = {
+			check_variable = {
+				which = rmt_capitulos
+				value = 3
+			}
+		}
+		add_country_modifier = {
+			name = "rmt_nacao_de_destino"
+			duration = 9125
+		}
+	}
+	hidden_effect = {
+		set_country_flag = rmt_concluiu_$destino$
+		clr_country_flag = rmt_destino_$destino$
+		clr_country_flag = rmt_capitulo_ativo
+		clr_country_flag = rmt_alvo_ita
+		clr_country_flag = rmt_alvo_spa
+		clr_country_flag = rmt_ramo_ouro
+		clr_country_flag = rmt_ramo_povoamento
+	}
+	custom_tooltip = rmt_encerrar_capitulo_tt
+}

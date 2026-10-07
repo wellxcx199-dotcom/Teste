@@ -1,0 +1,94 @@
+namespace = rmt_eventos
+
+# O conselho do destino: mostra so as cartas sorteadas pela decisao.
+# Cada opcao tem um trigger; opcoes cujo trigger e falso nem aparecem.
+country_event = {
+	id = rmt_eventos.1
+	title = rmt_eventos.1.t
+	desc = rmt_eventos.1.d
+	picture = GOOD_WITH_MONARCH_eventPicture
+	is_triggered_only = yes
+
+	option = {
+		name = rmt_eventos.1.comercio
+		trigger = { has_country_flag = rmt_oferta_comercio }
+		rmt_iniciar_destino = { destino = comercio }
+	}
+	option = {
+		name = rmt_eventos.1.colonial
+		trigger = { has_country_flag = rmt_oferta_colonial }
+		rmt_iniciar_destino = { destino = colonial }
+	}
+	option = {
+		name = rmt_eventos.1.unificacao
+		trigger = { has_country_flag = rmt_oferta_unificacao }
+		hidden_effect = {
+			if = {
+				limit = { capital_scope = { region = italy_region } }
+				set_country_flag = rmt_alvo_ita
+			}
+			else = {
+				set_country_flag = rmt_alvo_spa
+			}
+		}
+		rmt_iniciar_destino = { destino = unificacao }
+	}
+	option = {
+		name = rmt_eventos.1.conquista
+		trigger = { has_country_flag = rmt_oferta_conquista }
+		rmt_marcar_alvo_conquista = yes
+		rmt_iniciar_destino = { destino = conquista }
+	}
+	option = {
+		name = rmt_eventos.1.fe
+		trigger = { has_country_flag = rmt_oferta_fe }
+		rmt_iniciar_destino = { destino = fe }
+	}
+	option = {
+		name = rmt_eventos.1.suditos
+		trigger = { has_country_flag = rmt_oferta_suditos }
+		rmt_iniciar_destino = { destino = suditos }
+	}
+	# So aparece se nenhuma carta saiu.
+	option = {
+		name = rmt_eventos.1.nada
+		trigger = {
+			NOT = { has_country_flag = rmt_oferta_comercio }
+			NOT = { has_country_flag = rmt_oferta_colonial }
+			NOT = { has_country_flag = rmt_oferta_unificacao }
+			NOT = { has_country_flag = rmt_oferta_conquista }
+			NOT = { has_country_flag = rmt_oferta_fe }
+			NOT = { has_country_flag = rmt_oferta_suditos }
+		}
+		hidden_effect = {
+			if = {
+				limit = { NOT = { rmt_algum_destino_elegivel = yes } }
+				set_country_flag = rmt_destinos_esgotados
+			}
+			clr_country_flag = rmt_capitulo_ativo
+		}
+	}
+}
+
+# Bifurcacao do destino colonial, disparada pela missao rmt_colonial_2.
+# A escolha decide qual serie aparece na coluna 4.
+country_event = {
+	id = rmt_eventos.2
+	title = rmt_eventos.2.t
+	desc = rmt_eventos.2.d
+	picture = COLONIZATION_eventPicture
+	is_triggered_only = yes
+
+	option = {
+		name = rmt_eventos.2.a
+		ai_chance = { factor = 50 }
+		set_country_flag = rmt_ramo_ouro
+		swap_non_generic_missions = yes
+	}
+	option = {
+		name = rmt_eventos.2.b
+		ai_chance = { factor = 50 }
+		set_country_flag = rmt_ramo_povoamento
+		swap_non_generic_missions = yes
+	}
+}

@@ -1,0 +1,62 @@
+# Condicoes com nome proprio. Cada uma e usada em varios arquivos:
+# no sorteio (rmt_efeitos.txt) e nas opcoes do evento (rmt_eventos.txt).
+# Para mudar quem pode receber um destino, mude so aqui.
+
+rmt_elegivel_comercio = {
+	NOT = { has_country_flag = rmt_concluiu_comercio }
+}
+
+rmt_elegivel_colonial = {
+	NOT = { has_country_flag = rmt_concluiu_colonial }
+	capital_scope = { continent = europe }
+	any_owned_province = { has_port = yes }
+}
+
+rmt_elegivel_unificacao = {
+	NOT = { has_country_flag = rmt_concluiu_unificacao }
+	OR = {
+		AND = {
+			capital_scope = { region = italy_region }
+			NOT = { exists = ITA }
+		}
+		AND = {
+			capital_scope = { region = iberia_region }
+			NOT = { exists = SPA }
+		}
+	}
+}
+
+# Usado dentro do escopo de um pais vizinho: ele serve de alvo?
+# Nem pequeno demais (precisa de 3 provincias para a segunda missao),
+# nem grande demais, nao pode ser sudito de outro pais nem seu aliado.
+rmt_alvo_conquista_valido = {
+	num_of_cities = 3
+	NOT = { num_of_cities = 16 }
+	is_subject = no
+	NOT = { alliance_with = ROOT }
+}
+
+rmt_elegivel_conquista = {
+	ai = no	# as marcas de provincia sao globais; com a IA usando, elas se misturariam
+	NOT = { has_country_flag = rmt_concluiu_conquista }
+	any_neighbor_country = { rmt_alvo_conquista_valido = yes }
+}
+
+rmt_elegivel_fe = {
+	NOT = { has_country_flag = rmt_concluiu_fe }
+}
+
+rmt_elegivel_suditos = {
+	NOT = { has_country_flag = rmt_concluiu_suditos }
+}
+
+rmt_algum_destino_elegivel = {
+	OR = {
+		rmt_elegivel_comercio = yes
+		rmt_elegivel_colonial = yes
+		rmt_elegivel_unificacao = yes
+		rmt_elegivel_conquista = yes
+		rmt_elegivel_fe = yes
+		rmt_elegivel_suditos = yes
+	}
+}

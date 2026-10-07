@@ -1,13 +1,20 @@
-# Arvores de missoes sorteadas pela decisao rmt_sortear_destino.
+# Arvores de missoes escolhidas no evento rmt_eventos.1.
 #
 # Cada bloco de primeiro nivel e uma "serie" (uma coluna na tela de missoes).
 # A serie so aparece para quem cumpre o potential, aqui uma flag de destino.
 # Dentro dela, cada missao aponta a anterior em required_missions, formando a seta.
+# A ultima missao de cada destino chama rmt_encerrar_capitulo, que da a
+# recompensa final e libera um novo sorteio.
+#
+# ai = yes so tem efeito se o jogador ligar a decisao "Destinos para a IA".
 
+########################################
+# Comercio
+########################################
 rmt_serie_comercio = {
 	slot = 5
 	generic = no
-	ai = no
+	ai = yes
 	has_country_shield = yes
 	potential = {
 		has_country_flag = rmt_destino_comercio
@@ -58,16 +65,18 @@ rmt_serie_comercio = {
 			}
 		}
 		effect = {
-			add_years_of_income = 1
-			add_prestige = 25
+			rmt_encerrar_capitulo = { destino = comercio }
 		}
 	}
 }
 
+########################################
+# Colonial (tronco na coluna 5, ramo escolhido por evento na coluna 4)
+########################################
 rmt_serie_colonial = {
 	slot = 5
 	generic = no
-	ai = no
+	ai = yes
 	has_country_shield = yes
 	potential = {
 		has_country_flag = rmt_destino_colonial
@@ -107,15 +116,77 @@ rmt_serie_colonial = {
 				name = "rmt_febre_colonial"
 				duration = 9125
 			}
+			# Protecao: o evento so dispara se o ramo ainda nao foi escolhido.
+			if = {
+				limit = {
+					NOT = { has_country_flag = rmt_ramo_ouro }
+					NOT = { has_country_flag = rmt_ramo_povoamento }
+				}
+				country_event = { id = rmt_eventos.2 }
+			}
 		}
 	}
+}
 
-	rmt_colonial_3 = {
-		icon = mission_empire
+rmt_serie_colonial_ouro = {
+	slot = 4
+	generic = no
+	ai = yes
+	has_country_shield = yes
+	potential = {
+		has_country_flag = rmt_destino_colonial
+		has_country_flag = rmt_ramo_ouro
+	}
+
+	rmt_ouro_1 = {
+		icon = mission_war_chest
 		required_missions = { rmt_colonial_2 }
 		trigger = {
 			num_of_owned_provinces_with = {
-				value = 15
+				value = 2
+				trade_goods = gold
+				NOT = { continent = europe }
+			}
+		}
+		effect = {
+			add_treasury = 200
+		}
+	}
+
+	rmt_ouro_2 = {
+		icon = mission_high_income
+		required_missions = { rmt_ouro_1 }
+		trigger = {
+			num_of_owned_provinces_with = {
+				value = 4
+				trade_goods = gold
+				NOT = { continent = europe }
+			}
+			treasury = 1000
+		}
+		effect = {
+			rmt_encerrar_capitulo = { destino = colonial }
+		}
+	}
+}
+
+rmt_serie_colonial_povoamento = {
+	slot = 4
+	generic = no
+	ai = yes
+	has_country_shield = yes
+	potential = {
+		has_country_flag = rmt_destino_colonial
+		has_country_flag = rmt_ramo_povoamento
+	}
+
+	rmt_povoamento_1 = {
+		icon = mission_establish_high_seas_navy
+		required_missions = { rmt_colonial_2 }
+		trigger = {
+			num_of_owned_provinces_with = {
+				value = 8
+				is_city = yes
 				OR = {
 					continent = north_america
 					continent = south_america
@@ -123,16 +194,37 @@ rmt_serie_colonial = {
 			}
 		}
 		effect = {
-			add_prestige = 25
-			add_dip_power = 100
+			add_adm_power = 50
+		}
+	}
+
+	rmt_povoamento_2 = {
+		icon = mission_empire
+		required_missions = { rmt_povoamento_1 }
+		trigger = {
+			num_of_owned_provinces_with = {
+				value = 10
+				is_city = yes
+				culture = ROOT
+				OR = {
+					continent = north_america
+					continent = south_america
+				}
+			}
+		}
+		effect = {
+			rmt_encerrar_capitulo = { destino = colonial }
 		}
 	}
 }
 
+########################################
+# Unificacao (Italia ou Espanha)
+########################################
 rmt_serie_unificacao = {
 	slot = 5
 	generic = no
-	ai = no
+	ai = yes
 	has_country_shield = yes
 	potential = {
 		has_country_flag = rmt_destino_unificacao
@@ -222,8 +314,183 @@ rmt_serie_unificacao = {
 			}
 		}
 		effect = {
-			add_prestige = 50
-			add_adm_power = 100
+			rmt_encerrar_capitulo = { destino = unificacao }
+		}
+	}
+}
+
+########################################
+# Conquista (alvo escolhido no momento do sorteio, marcado nas provincias)
+########################################
+rmt_serie_conquista = {
+	slot = 5
+	generic = no
+	ai = no
+	has_country_shield = yes
+	potential = {
+		has_country_flag = rmt_destino_conquista
+	}
+
+	rmt_conquista_1 = {
+		icon = mission_cannons_firing
+		required_missions = { }
+		provinces_to_highlight = {
+			has_province_flag = rmt_alvo_conquista
+			NOT = { owned_by = ROOT }
+		}
+		trigger = {
+			num_of_owned_provinces_with = {
+				value = 1
+				has_province_flag = rmt_alvo_conquista
+			}
+		}
+		effect = {
+			add_mil_power = 50
+		}
+	}
+
+	rmt_conquista_2 = {
+		icon = mission_assemble_an_army
+		required_missions = { rmt_conquista_1 }
+		provinces_to_highlight = {
+			has_province_flag = rmt_alvo_conquista
+			NOT = { owned_by = ROOT }
+		}
+		trigger = {
+			num_of_owned_provinces_with = {
+				value = 3
+				has_province_flag = rmt_alvo_conquista
+			}
+		}
+		effect = {
+			add_country_modifier = {
+				name = "rmt_furia_conquistadora"
+				duration = 3650	# 10 anos
+			}
+		}
+	}
+
+	rmt_conquista_3 = {
+		icon = mission_empire
+		required_missions = { rmt_conquista_2 }
+		provinces_to_highlight = {
+			has_province_flag = rmt_alvo_conquista
+			NOT = { owned_by = ROOT }
+		}
+		trigger = {
+			custom_trigger_tooltip = {
+				tooltip = rmt_conquista_3_tt
+				NOT = {
+					any_country = {
+						has_country_flag = rmt_alvo_pais
+						NOT = { is_subject_of = ROOT }
+					}
+				}
+			}
+		}
+		effect = {
+			hidden_effect = { rmt_limpar_alvo_conquista = yes }
+			rmt_encerrar_capitulo = { destino = conquista }
+		}
+	}
+}
+
+########################################
+# Fe
+########################################
+rmt_serie_fe = {
+	slot = 5
+	generic = no
+	ai = yes
+	has_country_shield = yes
+	potential = {
+		has_country_flag = rmt_destino_fe
+	}
+
+	rmt_fe_1 = {
+		icon = mission_hands_praying
+		required_missions = { }
+		trigger = {
+			religious_unity = 0.8
+		}
+		effect = {
+			add_adm_power = 50
+		}
+	}
+
+	rmt_fe_2 = {
+		icon = mission_european_church
+		required_missions = { rmt_fe_1 }
+		trigger = {
+			religious_unity = 1
+		}
+		effect = {
+			add_country_modifier = {
+				name = "rmt_zelo_religioso"
+				duration = 9125
+			}
+		}
+	}
+
+	rmt_fe_3 = {
+		icon = mission_monarch_in_throne_room
+		required_missions = { rmt_fe_2 }
+		trigger = {
+			religious_unity = 1
+			stability = 3
+			prestige = 50
+		}
+		effect = {
+			rmt_encerrar_capitulo = { destino = fe }
+		}
+	}
+}
+
+########################################
+# Suditos
+########################################
+rmt_serie_suditos = {
+	slot = 5
+	generic = no
+	ai = yes
+	has_country_shield = yes
+	potential = {
+		has_country_flag = rmt_destino_suditos
+	}
+
+	rmt_suditos_1 = {
+		icon = mission_alliances
+		required_missions = { }
+		trigger = {
+			num_of_subjects = 1
+		}
+		effect = {
+			add_dip_power = 50
+		}
+	}
+
+	rmt_suditos_2 = {
+		icon = mission_have_two_subjects
+		required_missions = { rmt_suditos_1 }
+		trigger = {
+			num_of_subjects = 2
+		}
+		effect = {
+			add_country_modifier = {
+				name = "rmt_rede_de_vassalos"
+				duration = 9125
+			}
+		}
+	}
+
+	rmt_suditos_3 = {
+		icon = mission_empire
+		required_missions = { rmt_suditos_2 }
+		trigger = {
+			num_of_subjects = 4
+		}
+		effect = {
+			rmt_encerrar_capitulo = { destino = suditos }
 		}
 	}
 }

@@ -1,4 +1,4 @@
-# Decisao que sorteia o "destino" do pais e troca a arvore de missoes.
+# Decisoes do mod.
 #
 # Por que uma decisao e nao um evento automatico no inicio do jogo?
 # O gatilho de inicio (on_startup) fica num arquivo do jogo original que teria
@@ -6,11 +6,21 @@
 # outros mods. Decisoes, ao contrario, podem ficar num arquivo novo so nosso.
 
 country_decisions = {
+
+	# Abre um novo capitulo: sorteia ate 3 cartas e mostra o evento de escolha.
+	# Volta a aparecer quando o capitulo atual termina.
 	rmt_sortear_destino = {
 		major = yes
 		potential = {
-			ai = no	# so o jogador ve a decisao
-			NOT = { has_country_flag = rmt_destino_sorteado }
+			NOT = { has_country_flag = rmt_capitulo_ativo }
+			NOT = { has_country_flag = rmt_destinos_esgotados }
+			OR = {
+				ai = no
+				AND = {
+					has_global_flag = rmt_ia_ativa
+					total_development = 150	# so IAs medias e grandes, para poupar desempenho
+				}
+			}
 		}
 		allow = {
 			is_at_war = no
@@ -18,67 +28,45 @@ country_decisions = {
 		effect = {
 			custom_tooltip = rmt_sortear_destino_tt
 			hidden_effect = {
-				set_country_flag = rmt_destino_sorteado
-				# Cada numero e um "peso": quanto maior, mais provavel.
-				# Os blocos modifier multiplicam o peso quando a condicao e verdadeira;
-				# factor = 0 elimina a opcao para aquele pais.
-				random_list = {
-					10 = {
-						modifier = {
-							factor = 1.5
-							any_owned_province = { has_port = yes }
-						}
-						set_country_flag = rmt_destino_comercio
-					}
-					10 = {
-						modifier = {
-							factor = 0
-							NOT = { capital_scope = { continent = europe } }
-						}
-						modifier = {
-							factor = 0
-							NOT = { any_owned_province = { has_port = yes } }
-						}
-						set_country_flag = rmt_destino_colonial
-					}
-					10 = {
-						modifier = {
-							factor = 0
-							NOT = { capital_scope = { region = italy_region } }
-							NOT = { capital_scope = { region = iberia_region } }
-						}
-						modifier = {
-							factor = 0
-							capital_scope = { region = italy_region }
-							exists = ITA
-						}
-						modifier = {
-							factor = 0
-							capital_scope = { region = iberia_region }
-							exists = SPA
-						}
-						modifier = {
-							factor = 3	# quem pode unificar tem mais chance de receber esse destino
-							OR = {
-								capital_scope = { region = italy_region }
-								capital_scope = { region = iberia_region }
-							}
-						}
-						set_country_flag = rmt_destino_unificacao
-						if = {
-							limit = { capital_scope = { region = italy_region } }
-							set_country_flag = rmt_alvo_ita
-						}
-						else = {
-							set_country_flag = rmt_alvo_spa
-						}
-					}
-				}
+				set_country_flag = rmt_capitulo_ativo	# tambem serve de cronometro do capitulo
+				rmt_sortear_uma_oferta = yes
+				rmt_sortear_uma_oferta = yes
+				rmt_sortear_uma_oferta = yes
 			}
-			# Reavalia o "potential" das series de missoes. O jogo so faz essa
-			# avaliacao no inicio da partida e quando este comando roda, entao
-			# sem ele as missoes novas nunca apareceriam.
-			swap_non_generic_missions = yes
+			country_event = { id = rmt_eventos.1 }
+		}
+		ai_will_do = {
+			factor = 1
+		}
+	}
+
+	# Interruptor da IA. Desligado por padrao.
+	rmt_ativar_ia = {
+		potential = {
+			ai = no
+			NOT = { has_global_flag = rmt_ia_ativa }
+		}
+		allow = {
+			always = yes
+		}
+		effect = {
+			set_global_flag = rmt_ia_ativa
+		}
+		ai_will_do = {
+			factor = 0
+		}
+	}
+
+	rmt_desativar_ia = {
+		potential = {
+			ai = no
+			has_global_flag = rmt_ia_ativa
+		}
+		allow = {
+			always = yes
+		}
+		effect = {
+			clr_global_flag = rmt_ia_ativa
 		}
 		ai_will_do = {
 			factor = 0
