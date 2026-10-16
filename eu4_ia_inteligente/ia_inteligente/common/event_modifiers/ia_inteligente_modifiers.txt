@@ -1,0 +1,102 @@
+# ============================================================================
+# IA Inteligente e Estilos de Jogo - modificadores dos estilos de jogo
+#
+# Cada estilo da um bonus que combina com a estrategia e uma penalidade que
+# a equilibra. Assim o estilo nao e uma "trapaca": ele empurra a IA para um
+# caminho, mas cobra um preco em outra area.
+#
+# O nome de cada modificador e "smartai_ps_<estilo>" porque o efeito
+# smartai_apply_playstyle monta esse nome automaticamente.
+# ============================================================================
+
+# Conquistador Implacavel: vive de guerra e reivindicacoes.
+smartai_ps_conqueror = {
+	land_morale = 0.05
+	fabricate_claims_cost = -0.25
+	core_creation = -0.05
+	stability_cost_modifier = 0.10
+	improve_relation_modifier = -0.15
+}
+
+# Principe Mercador: dinheiro antes de bandeiras.
+smartai_ps_merchant = {
+	trade_efficiency = 0.10
+	global_trade_power = 0.05
+	land_morale = -0.05
+}
+
+# Arquiteto do Reino: constroi e desenvolve.
+smartai_ps_builder = {
+	build_cost = -0.10
+	development_cost = -0.05
+	production_efficiency = 0.05
+	global_manpower_modifier = -0.10
+}
+
+# Fanatico Zeloso: uma so fe para todos os vizinhos.
+smartai_ps_zealot = {
+	tolerance_own = 1
+	global_missionary_strength = 0.01
+	tolerance_heretic = -1
+	tolerance_heathen = -1
+	improve_relation_modifier = -0.10
+}
+
+# Explorador Ultramarino: olhos no horizonte.
+smartai_ps_colonizer = {
+	global_colonial_growth = 10
+	colonist_placement_chance = 0.05
+	land_forcelimit_modifier = -0.10
+}
+
+# Tecelao de Intrigas: espioes, cartas e aliancas contra os rivais.
+smartai_ps_schemer = {
+	spy_offence = 0.20
+	diplomatic_reputation = 1
+	prestige = -0.5
+}
+
+# Fortaleza Eterna: ninguem entra, ninguem sai.
+smartai_ps_turtle = {
+	defensiveness = 0.20
+	fort_maintenance_modifier = -0.20
+	garrison_size = 0.15
+	ae_impact = 0.15
+}
+
+# Senhor dos Mares: frotas, corsarios e portos.
+smartai_ps_sealord = {
+	naval_morale = 0.10
+	privateer_efficiency = 0.20
+	global_ship_cost = -0.10
+	land_forcelimit_modifier = -0.10
+}
+
+# Hegemon Diplomatico: vassalos, garantias e casamentos.
+smartai_ps_diplomat = {
+	diplomatic_upkeep = 1
+	diplomatic_annexation_cost = -0.10
+	improve_relation_modifier = 0.15
+	land_morale = -0.05
+}
+
+# Abutre Oportunista: ataca quem ja esta ocupado com outra guerra.
+smartai_ps_vulture = {
+	movement_speed = 0.10
+	siege_ability = 0.05
+	diplomatic_reputation = -1
+}
+
+# Reformista Iluminado: livros antes de canhoes.
+smartai_ps_scholar = {
+	technology_cost = -0.05
+	idea_cost = -0.05
+	army_tradition_decay = 0.01
+}
+
+# Rei Imprevisivel: ninguem sabe o que ele vai fazer amanha.
+smartai_ps_wildcard = {
+	prestige = 0.5
+	siege_ability = 0.05
+	global_unrest = 1
+}

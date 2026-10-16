@@ -1,0 +1,103 @@
+# ============================================================================
+# IA Inteligente e Estilos de Jogo - condicoes (scripted triggers)
+#
+# Cada estilo tem uma condicao de elegibilidade. Se um pais sorteia um estilo
+# para o qual nao e elegivel, nada acontece e o sorteio se repete alguns dias
+# depois. Isso faz com que estilos "dificeis" (ex.: Senhor dos Mares) so
+# aparecam em paises que fazem sentido (ex.: com varios portos).
+# ============================================================================
+
+# O pais tem algum estilo de jogo ativo?
+smartai_has_playstyle = {
+	has_country_flag = smartai_ps_assigned
+}
+
+# Pais independente (ou tributario), necessario para estilos agressivos.
+smartai_is_independent = {
+	is_subject = no
+}
+
+# Economia saudavel o bastante para pensar em guerra.
+smartai_can_afford_war = {
+	is_at_war = no
+	NOT = { num_of_loans = 3 }
+	NOT = { war_exhaustion = 5 }
+	manpower_percentage = 0.5
+}
+
+# Um vizinho que vale a pena atacar: mais fraco, sem alianca nem tregua.
+# Use dentro do escopo do VIZINHO (ROOT = pais da IA).
+smartai_is_easy_prey = {
+	NOT = { alliance_with = ROOT }
+	NOT = { truce_with = ROOT }
+	NOT = { war_with = ROOT }
+	NOT = { is_subject_of = ROOT }
+	NOT = { military_strength = { who = ROOT value = 0.66 } }
+}
+
+# --- Elegibilidade por estilo ---
+
+smartai_can_be_conqueror = {
+	smartai_is_independent = yes
+	num_of_cities = 3
+}
+
+smartai_can_be_merchant = {
+	OR = {
+		has_port = yes
+		government = republic
+	}
+}
+
+smartai_can_be_builder = {
+	num_of_cities = 2
+}
+
+smartai_can_be_zealot = {
+	any_neighbor_country = {
+		NOT = { religion = ROOT }
+	}
+}
+
+smartai_can_be_colonizer = {
+	has_port = yes
+}
+
+smartai_can_be_schemer = {
+	smartai_is_independent = yes
+}
+
+smartai_can_be_turtle = {
+	always = yes
+}
+
+smartai_can_be_sealord = {
+	num_of_ports = 3
+}
+
+smartai_can_be_diplomat = {
+	smartai_is_independent = yes
+}
+
+smartai_can_be_vulture = {
+	smartai_is_independent = yes
+	num_of_cities = 3
+}
+
+smartai_can_be_scholar = {
+	always = yes
+}
+
+smartai_can_be_wildcard = {
+	smartai_is_independent = yes
+}
+
+# Relacao "comum" com o outro pais: sem guerra entre os dois e sem laco de
+# suserano/vassalo. A revisao estrategica so mexe em atitudes desse tipo,
+# para nao estragar a lealdade de vassalos nem a relacao com o suserano.
+# Use dentro do escopo do OUTRO pais (ROOT = pais da IA).
+smartai_no_special_relation = {
+	NOT = { war_with = ROOT }
+	NOT = { is_subject_of = ROOT }
+	ROOT = { NOT = { is_subject_of = PREV } }
+}

@@ -1,0 +1,245 @@
+# ============================================================================
+# IA Inteligente e Estilos de Jogo - eventos
+#
+# smartai.1  (oculto)  Sorteia um estilo para cada pais da IA sem estilo.
+# smartai.2  (oculto)  Nova geracao: depois de decadas o estilo pode mudar.
+# smartai.3  (jogador) Relatorio dos embaixadores sobre o estilo de um pais.
+# smartai.4  (oculto)  "Ponte" usada pela decisao Consultar Embaixadores.
+# smartai.5  (oculto)  Remove o estilo se o pais passar a ser de um humano.
+# smartai.10 (oculto)  Revisao estrategica periodica de cada estilo.
+#
+# Os eventos com mean_time_to_happen nao precisam de on_actions, o que deixa
+# o mod compativel com quase qualquer outro mod.
+# ============================================================================
+
+namespace = smartai
+
+# ----------------------------------------------------------------------------
+# Sorteio do estilo de jogo
+# ----------------------------------------------------------------------------
+country_event = {
+	id = smartai.1
+	title = smartai.1.t
+	desc = smartai.1.d
+	picture = DIPLOMACY_eventPicture
+	hidden = yes
+
+	trigger = {
+		ai = yes
+		num_of_cities = 1
+		NOT = { has_country_flag = smartai_ps_assigned }
+	}
+
+	mean_time_to_happen = {
+		days = 1
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { has_global_flag = smartai_initialized } }
+			set_global_flag = smartai_initialized
+		}
+		smartai_roll_playstyle = yes
+	}
+
+	option = {
+		name = smartai.1.a
+	}
+}
+
+# ----------------------------------------------------------------------------
+# Nova geracao, novas ambicoes
+# ----------------------------------------------------------------------------
+country_event = {
+	id = smartai.2
+	title = smartai.2.t
+	desc = smartai.2.d
+	picture = DIPLOMACY_eventPicture
+	hidden = yes
+
+	trigger = {
+		ai = yes
+		is_at_war = no
+		had_country_flag = { flag = smartai_ps_assigned days = 7300 } # 20 anos
+	}
+
+	mean_time_to_happen = {
+		years = 25
+
+		# Estrategia dando errado? A corte muda de ideia mais rapido.
+		modifier = {
+			factor = 0.6
+			num_of_loans = 3
+		}
+		modifier = {
+			factor = 0.7
+			NOT = { stability = 0 }
+		}
+	}
+
+	immediate = {
+		# Sem flag, o evento smartai.1 sorteia um novo estilo em poucos dias.
+		smartai_clear_playstyle = yes
+	}
+
+	option = {
+		name = smartai.2.a
+	}
+}
+
+# ----------------------------------------------------------------------------
+# Relatorio dos embaixadores (para jogadores humanos)
+# ROOT = jogador, FROM = pais da IA sobre o qual e o relatorio
+# ----------------------------------------------------------------------------
+country_event = {
+	id = smartai.3
+	title = smartai.3.t
+	desc = {
+		trigger = { FROM = { has_country_flag = smartai_ps_conqueror } }
+		desc = smartai.3.d.conqueror
+	}
+	desc = {
+		trigger = { FROM = { has_country_flag = smartai_ps_merchant } }
+		desc = smartai.3.d.merchant
+	}
+	desc = {
+		trigger = { FROM = { has_country_flag = smartai_ps_builder } }
+		desc = smartai.3.d.builder
+	}
+	desc = {
+		trigger = { FROM = { has_country_flag = smartai_ps_zealot } }
+		desc = smartai.3.d.zealot
+	}
+	desc = {
+		trigger = { FROM = { has_country_flag = smartai_ps_colonizer } }
+		desc = smartai.3.d.colonizer
+	}
+	desc = {
+		trigger = { FROM = { has_country_flag = smartai_ps_schemer } }
+		desc = smartai.3.d.schemer
+	}
+	desc = {
+		trigger = { FROM = { has_country_flag = smartai_ps_turtle } }
+		desc = smartai.3.d.turtle
+	}
+	desc = {
+		trigger = { FROM = { has_country_flag = smartai_ps_sealord } }
+		desc = smartai.3.d.sealord
+	}
+	desc = {
+		trigger = { FROM = { has_country_flag = smartai_ps_diplomat } }
+		desc = smartai.3.d.diplomat
+	}
+	desc = {
+		trigger = { FROM = { has_country_flag = smartai_ps_vulture } }
+		desc = smartai.3.d.vulture
+	}
+	desc = {
+		trigger = { FROM = { has_country_flag = smartai_ps_scholar } }
+		desc = smartai.3.d.scholar
+	}
+	desc = {
+		trigger = { FROM = { has_country_flag = smartai_ps_wildcard } }
+		desc = smartai.3.d.wildcard
+	}
+	picture = DIPLOMACY_eventPicture
+
+	is_triggered_only = yes
+
+	trigger = {
+		FROM = { has_country_flag = smartai_ps_assigned }
+	}
+
+	option = {
+		name = smartai.3.a
+	}
+}
+
+# ----------------------------------------------------------------------------
+# Ponte da decisao "Consultar Embaixadores"
+# ROOT = pais da IA, FROM = jogador que consultou.
+# Devolve o evento smartai.3 ao jogador com FROM = este pais.
+# ----------------------------------------------------------------------------
+country_event = {
+	id = smartai.4
+	title = smartai.4.t
+	desc = smartai.4.d
+	picture = DIPLOMACY_eventPicture
+	hidden = yes
+
+	is_triggered_only = yes
+
+	immediate = {
+		FROM = { country_event = { id = smartai.3 } }
+	}
+
+	option = {
+		name = smartai.4.a
+	}
+}
+
+# ----------------------------------------------------------------------------
+# Limpeza: pais passou a ser controlado por um humano
+# ----------------------------------------------------------------------------
+country_event = {
+	id = smartai.5
+	title = smartai.5.t
+	desc = smartai.5.d
+	picture = DIPLOMACY_eventPicture
+	hidden = yes
+
+	trigger = {
+		ai = no
+		has_country_flag = smartai_ps_assigned
+	}
+
+	mean_time_to_happen = {
+		days = 1
+	}
+
+	immediate = {
+		smartai_clear_playstyle = yes
+	}
+
+	option = {
+		name = smartai.5.a
+	}
+}
+
+# ----------------------------------------------------------------------------
+# Revisao estrategica
+# ----------------------------------------------------------------------------
+country_event = {
+	id = smartai.10
+	title = smartai.10.t
+	desc = smartai.10.d
+	picture = DIPLOMACY_eventPicture
+	hidden = yes
+
+	trigger = {
+		ai = yes
+		had_country_flag = { flag = smartai_ps_assigned days = 180 }
+	}
+
+	mean_time_to_happen = {
+		months = 24
+
+		# Estilos agressivos pensam em guerra com mais frequencia.
+		modifier = {
+			factor = 0.75
+			OR = {
+				has_country_flag = smartai_ps_conqueror
+				has_country_flag = smartai_ps_vulture
+				has_country_flag = smartai_ps_wildcard
+			}
+		}
+	}
+
+	immediate = {
+		smartai_strategy_review = yes
+	}
+
+	option = {
+		name = smartai.10.a
+	}
+}

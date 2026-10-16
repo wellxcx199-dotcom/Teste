@@ -1,0 +1,73 @@
+# ============================================================================
+# IA Inteligente e Estilos de Jogo - decisoes para o jogador
+# ============================================================================
+
+country_decisions = {
+
+	# Mostra o estilo de jogo de cada vizinho e rival (custa 10 de diplomacia).
+	smartai_consult_ambassadors = {
+		major = yes
+		potential = {
+			ai = no
+		}
+		allow = {
+			dip_power = 10
+			any_country = {
+				smartai_has_playstyle = yes
+				OR = {
+					is_neighbor_of = ROOT
+					is_rival = ROOT
+				}
+			}
+		}
+		effect = {
+			add_dip_power = -10
+			every_country = {
+				limit = {
+					smartai_has_playstyle = yes
+					OR = {
+						is_neighbor_of = ROOT
+						is_rival = ROOT
+					}
+				}
+				country_event = { id = smartai.4 }
+			}
+		}
+		ai_will_do = {
+			factor = 0
+		}
+	}
+
+	# Liga/desliga os avisos automaticos quando um vizinho troca de estilo.
+	smartai_notifications_disable = {
+		potential = {
+			ai = no
+			NOT = { has_global_flag = smartai_notifications_off }
+		}
+		allow = {
+			always = yes
+		}
+		effect = {
+			set_global_flag = smartai_notifications_off
+		}
+		ai_will_do = {
+			factor = 0
+		}
+	}
+
+	smartai_notifications_enable = {
+		potential = {
+			ai = no
+			has_global_flag = smartai_notifications_off
+		}
+		allow = {
+			always = yes
+		}
+		effect = {
+			clr_global_flag = smartai_notifications_off
+		}
+		ai_will_do = {
+			factor = 0
+		}
+	}
+}

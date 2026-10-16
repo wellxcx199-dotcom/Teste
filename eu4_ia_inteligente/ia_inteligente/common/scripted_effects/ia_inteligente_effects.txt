@@ -1,0 +1,424 @@
+# ============================================================================
+# IA Inteligente e Estilos de Jogo - efeitos (scripted effects)
+#
+# Escopo esperado em todos os efeitos: ROOT = pais controlado pela IA.
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Remove qualquer estilo de jogo do pais (flags + modificadores).
+# ----------------------------------------------------------------------------
+smartai_clear_playstyle = {
+	clr_country_flag = smartai_ps_assigned
+	clr_country_flag = smartai_ps_conqueror
+	clr_country_flag = smartai_ps_merchant
+	clr_country_flag = smartai_ps_builder
+	clr_country_flag = smartai_ps_zealot
+	clr_country_flag = smartai_ps_colonizer
+	clr_country_flag = smartai_ps_schemer
+	clr_country_flag = smartai_ps_turtle
+	clr_country_flag = smartai_ps_sealord
+	clr_country_flag = smartai_ps_diplomat
+	clr_country_flag = smartai_ps_vulture
+	clr_country_flag = smartai_ps_scholar
+	clr_country_flag = smartai_ps_wildcard
+	remove_country_modifier = smartai_ps_conqueror
+	remove_country_modifier = smartai_ps_merchant
+	remove_country_modifier = smartai_ps_builder
+	remove_country_modifier = smartai_ps_zealot
+	remove_country_modifier = smartai_ps_colonizer
+	remove_country_modifier = smartai_ps_schemer
+	remove_country_modifier = smartai_ps_turtle
+	remove_country_modifier = smartai_ps_sealord
+	remove_country_modifier = smartai_ps_diplomat
+	remove_country_modifier = smartai_ps_vulture
+	remove_country_modifier = smartai_ps_scholar
+	remove_country_modifier = smartai_ps_wildcard
+}
+
+# ----------------------------------------------------------------------------
+# Aplica um estilo. Parametros:
+#   style       = nome curto do estilo (conqueror, merchant, ...)
+#   personality = personalidade de IA do jogo (ai_militarist, ai_diplomat,
+#                 ai_capitalist, ai_colonialist, ai_balanced)
+# Exemplo: smartai_apply_playstyle = { style = conqueror personality = ai_militarist }
+# ----------------------------------------------------------------------------
+smartai_apply_playstyle = {
+	smartai_clear_playstyle = yes
+	set_country_flag = smartai_ps_assigned
+	set_country_flag = smartai_ps_$style$
+	add_country_modifier = {
+		name = smartai_ps_$style$
+		duration = -1
+	}
+	# locked = yes impede que o jogo troque a personalidade quando o
+	# monarca muda; quem decide agora e o estilo de jogo.
+	set_ai_personality = {
+		personality = $personality$
+		locked = yes
+	}
+	smartai_notify_players = yes
+}
+
+# ----------------------------------------------------------------------------
+# Sorteia um estilo. Se o pais nao for elegivel ao estilo sorteado, nada
+# acontece; como a flag smartai_ps_assigned continua ausente, o evento
+# smartai.1 dispara de novo em poucos dias e sorteia outra vez.
+# Os numeros sao pesos: 12 e o dobro de provavel que 6.
+# ----------------------------------------------------------------------------
+smartai_roll_playstyle = {
+	random_list = {
+		12 = {
+			if = {
+				limit = { smartai_can_be_conqueror = yes }
+				smartai_apply_playstyle = { style = conqueror personality = ai_militarist }
+			}
+		}
+		10 = {
+			if = {
+				limit = { smartai_can_be_merchant = yes }
+				smartai_apply_playstyle = { style = merchant personality = ai_capitalist }
+			}
+		}
+		10 = {
+			if = {
+				limit = { smartai_can_be_builder = yes }
+				smartai_apply_playstyle = { style = builder personality = ai_capitalist }
+			}
+		}
+		8 = {
+			if = {
+				limit = { smartai_can_be_zealot = yes }
+				smartai_apply_playstyle = { style = zealot personality = ai_militarist }
+			}
+		}
+		8 = {
+			if = {
+				limit = { smartai_can_be_colonizer = yes }
+				smartai_apply_playstyle = { style = colonizer personality = ai_colonialist }
+			}
+		}
+		8 = {
+			if = {
+				limit = { smartai_can_be_schemer = yes }
+				smartai_apply_playstyle = { style = schemer personality = ai_diplomat }
+			}
+		}
+		8 = {
+			if = {
+				limit = { smartai_can_be_turtle = yes }
+				smartai_apply_playstyle = { style = turtle personality = ai_balanced }
+			}
+		}
+		6 = {
+			if = {
+				limit = { smartai_can_be_sealord = yes }
+				smartai_apply_playstyle = { style = sealord personality = ai_militarist }
+			}
+		}
+		10 = {
+			if = {
+				limit = { smartai_can_be_diplomat = yes }
+				smartai_apply_playstyle = { style = diplomat personality = ai_diplomat }
+			}
+		}
+		8 = {
+			if = {
+				limit = { smartai_can_be_vulture = yes }
+				smartai_apply_playstyle = { style = vulture personality = ai_militarist }
+			}
+		}
+		8 = {
+			if = {
+				limit = { smartai_can_be_scholar = yes }
+				smartai_apply_playstyle = { style = scholar personality = ai_balanced }
+			}
+		}
+		4 = {
+			if = {
+				limit = { smartai_can_be_wildcard = yes }
+				smartai_apply_playstyle = { style = wildcard personality = ai_balanced }
+			}
+		}
+	}
+}
+
+# ----------------------------------------------------------------------------
+# Avisa jogadores humanos vizinhos ou rivais (evento smartai.3).
+# No primeiro ano de campanha os avisos ficam desligados para nao encher a
+# tela de janelas no inicio do jogo; use a decisao "Consultar Embaixadores".
+# ----------------------------------------------------------------------------
+smartai_notify_players = {
+	if = {
+		limit = {
+			NOT = { has_global_flag = smartai_notifications_off }
+			had_global_flag = { flag = smartai_initialized days = 365 }
+		}
+		every_country = {
+			limit = {
+				ai = no
+				OR = {
+					is_neighbor_of = ROOT
+					is_rival = ROOT
+				}
+			}
+			country_event = { id = smartai.3 }
+		}
+	}
+}
+
+# ----------------------------------------------------------------------------
+# Destrava as atitudes que a revisao estrategica anterior travou, para que
+# a IA possa recalcular. Aliados e inimigos em guerra nao sao tocados.
+# ----------------------------------------------------------------------------
+smartai_reset_attitudes = {
+	every_country = {
+		limit = {
+			OR = {
+				is_neighbor_of = ROOT
+				is_rival = ROOT
+			}
+			NOT = { alliance_with = ROOT }
+			smartai_no_special_relation = yes
+		}
+		ROOT = {
+			set_ai_attitude = {
+				attitude = attitude_neutral
+				who = PREV
+				locked = no
+			}
+		}
+	}
+}
+
+# ----------------------------------------------------------------------------
+# Revisao estrategica: cada estilo "pensa" de um jeito diferente.
+# Chamado pelo evento smartai.10 a cada ~2 anos.
+# ----------------------------------------------------------------------------
+smartai_strategy_review = {
+	smartai_reset_attitudes = yes
+
+	# --- Conquistador: escolhe uma presa fraca e forja uma reivindicacao ---
+	if = {
+		limit = {
+			has_country_flag = smartai_ps_conqueror
+			smartai_can_afford_war = yes
+		}
+		random_neighbor_country = {
+			limit = { smartai_is_easy_prey = yes }
+			save_event_target_as = smartai_prey
+		}
+		if = {
+			limit = { has_saved_event_target = smartai_prey }
+			set_ai_attitude = {
+				attitude = attitude_hostile
+				who = event_target:smartai_prey
+				locked = yes
+			}
+			event_target:smartai_prey = {
+				random_owned_province = {
+					limit = {
+						is_capital = no
+						NOT = { is_claim = ROOT }
+						NOT = { is_core = ROOT }
+						any_neighbor_province = { owned_by = ROOT }
+					}
+					add_claim = ROOT
+				}
+			}
+		}
+	}
+
+	# --- Abutre: ataca vizinhos fracos que ja estao presos em outra guerra ---
+	if = {
+		limit = {
+			has_country_flag = smartai_ps_vulture
+			smartai_can_afford_war = yes
+		}
+		random_neighbor_country = {
+			limit = {
+				smartai_is_easy_prey = yes
+				is_at_war = yes
+			}
+			save_event_target_as = smartai_prey
+		}
+		if = {
+			limit = { has_saved_event_target = smartai_prey }
+			set_ai_attitude = {
+				attitude = attitude_hostile
+				who = event_target:smartai_prey
+				locked = yes
+			}
+		}
+	}
+
+	# --- Fanatico: mira no infiel mais fraco da vizinhanca ---
+	if = {
+		limit = {
+			has_country_flag = smartai_ps_zealot
+			smartai_can_afford_war = yes
+		}
+		random_neighbor_country = {
+			limit = {
+				smartai_is_easy_prey = yes
+				NOT = { religion = ROOT }
+			}
+			save_event_target_as = smartai_prey
+		}
+		if = {
+			limit = { has_saved_event_target = smartai_prey }
+			set_ai_attitude = {
+				attitude = attitude_hostile
+				who = event_target:smartai_prey
+				locked = yes
+			}
+		}
+		# Correligionarios sao amigos naturais.
+		every_neighbor_country = {
+			limit = {
+				religion = ROOT
+				smartai_no_special_relation = yes
+				NOT = { is_rival = ROOT }
+			}
+			ROOT = {
+				set_ai_attitude = { attitude = attitude_friendly who = PREV locked = yes }
+			}
+		}
+	}
+
+	# --- Senhor dos Mares: presa fraca que tenha litoral ---
+	if = {
+		limit = {
+			has_country_flag = smartai_ps_sealord
+			smartai_can_afford_war = yes
+		}
+		random_neighbor_country = {
+			limit = {
+				smartai_is_easy_prey = yes
+				has_port = yes
+			}
+			save_event_target_as = smartai_prey
+		}
+		if = {
+			limit = { has_saved_event_target = smartai_prey }
+			set_ai_attitude = {
+				attitude = attitude_hostile
+				who = event_target:smartai_prey
+				locked = yes
+			}
+		}
+	}
+
+	# --- Estilos pacificos: amizade com todos os vizinhos que nao sao rivais ---
+	if = {
+		limit = {
+			OR = {
+				has_country_flag = smartai_ps_merchant
+				has_country_flag = smartai_ps_builder
+				has_country_flag = smartai_ps_colonizer
+				has_country_flag = smartai_ps_scholar
+			}
+		}
+		every_neighbor_country = {
+			limit = {
+				smartai_no_special_relation = yes
+				NOT = { is_rival = ROOT }
+			}
+			ROOT = {
+				set_ai_attitude = { attitude = attitude_friendly who = PREV locked = yes }
+			}
+		}
+	}
+
+	# --- Hegemon: protege os pequenos (garantias) e cultiva os grandes ---
+	if = {
+		limit = { has_country_flag = smartai_ps_diplomat }
+		every_neighbor_country = {
+			limit = {
+				smartai_no_special_relation = yes
+				NOT = { is_rival = ROOT }
+				is_subject = no
+			}
+			if = {
+				limit = { NOT = { military_strength = { who = ROOT value = 0.5 } } }
+				ROOT = {
+					set_ai_attitude = { attitude = attitude_protective who = PREV locked = yes }
+				}
+			}
+			else = {
+				ROOT = {
+					set_ai_attitude = { attitude = attitude_friendly who = PREV locked = yes }
+				}
+			}
+		}
+	}
+
+	# --- Fortaleza: desconfia do vizinho forte, faz amizade com os outros ---
+	if = {
+		limit = { has_country_flag = smartai_ps_turtle }
+		every_neighbor_country = {
+			limit = {
+				smartai_no_special_relation = yes
+				NOT = { alliance_with = ROOT }
+			}
+			if = {
+				limit = { military_strength = { who = ROOT value = 1.5 } }
+				ROOT = {
+					set_ai_attitude = { attitude = attitude_defensive who = PREV locked = yes }
+				}
+			}
+			else_if = {
+				limit = { NOT = { is_rival = ROOT } }
+				ROOT = {
+					set_ai_attitude = { attitude = attitude_friendly who = PREV locked = yes }
+				}
+			}
+		}
+	}
+
+	# --- Tecelao: "o inimigo do meu inimigo e meu amigo" ---
+	if = {
+		limit = { has_country_flag = smartai_ps_schemer }
+		every_country = {
+			limit = {
+				smartai_no_special_relation = yes
+				NOT = { is_rival = ROOT }
+				any_rival_country = { is_rival = ROOT }
+			}
+			ROOT = {
+				set_ai_attitude = { attitude = attitude_friendly who = PREV locked = yes }
+			}
+		}
+	}
+
+	# --- Rei Imprevisivel: cada revisao e uma surpresa ---
+	if = {
+		limit = { has_country_flag = smartai_ps_wildcard }
+		random_list = {
+			40 = {
+				random_neighbor_country = {
+					limit = { smartai_is_easy_prey = yes }
+					ROOT = {
+						set_ai_attitude = { attitude = attitude_hostile who = PREV locked = yes }
+					}
+				}
+			}
+			30 = {
+				random_neighbor_country = {
+					limit = { smartai_no_special_relation = yes }
+					ROOT = {
+						set_ai_attitude = { attitude = attitude_friendly who = PREV locked = yes }
+					}
+				}
+			}
+			30 = {
+				random_list = {
+					20 = { set_ai_personality = { personality = ai_militarist locked = yes } }
+					20 = { set_ai_personality = { personality = ai_diplomat locked = yes } }
+					20 = { set_ai_personality = { personality = ai_capitalist locked = yes } }
+					20 = { set_ai_personality = { personality = ai_colonialist locked = yes } }
+					20 = { set_ai_personality = { personality = ai_balanced locked = yes } }
+				}
+			}
+		}
+	}
+}

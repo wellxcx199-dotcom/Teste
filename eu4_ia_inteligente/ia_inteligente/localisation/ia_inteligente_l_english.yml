@@ -1,0 +1,73 @@
+﻿l_english:
+ # ---------------------------------------------------------------------------
+ # IA Inteligente e Estilos de Jogo
+ # O EU4 nao tem opcao de idioma portugues, por isso o texto em portugues
+ # fica no arquivo de ingles (l_english) e aparece com o jogo em ingles.
+ # ---------------------------------------------------------------------------
+
+ # --- Modificadores (nome e descricao que aparecem no pais) ---
+ smartai_ps_conqueror:0 "Doutrina: Conquistador Implacável"
+ desc_smartai_ps_conqueror:0 "A corte só pensa em expandir as fronteiras. Espiões forjam reivindicações sobre os vizinhos fracos e os generais são tratados como heróis, mas os vizinhos desconfiam de tanta ambição."
+ smartai_ps_merchant:0 "Doutrina: Príncipe Mercador"
+ desc_smartai_ps_merchant:0 "Ouro vale mais que glória. O reino busca rotas de comércio e amizades lucrativas, ainda que seus soldados tenham pouca vontade de morrer por uma bandeira."
+ smartai_ps_builder:0 "Doutrina: Arquiteto do Reino"
+ desc_smartai_ps_builder:0 "Pontes, oficinas e catedrais. A coroa investe no próprio território e prefere a paz, mas menos homens estão disponíveis para o exército."
+ smartai_ps_zealot:0 "Doutrina: Fanático Zeloso"
+ desc_smartai_ps_zealot:0 "Há uma só fé verdadeira. Os vizinhos que a compartilham são irmãos; os demais, alvos."
+ smartai_ps_colonizer:0 "Doutrina: Explorador Ultramarino"
+ desc_smartai_ps_colonizer:0 "O futuro está além do mar. Colônias crescem mais rápido, mas o exército em casa é menor."
+ smartai_ps_schemer:0 "Doutrina: Tecelão de Intrigas"
+ desc_smartai_ps_schemer:0 "O inimigo do meu inimigo é meu amigo. Cartas secretas e espiões tecem uma rede contra os rivais do reino."
+ smartai_ps_turtle:0 "Doutrina: Fortaleza Eterna"
+ desc_smartai_ps_turtle:0 "Muralhas altas e guarnições fortes. O reino desconfia do vizinho poderoso e qualquer conquista provoca grande alarme."
+ smartai_ps_sealord:0 "Doutrina: Senhor dos Mares"
+ desc_smartai_ps_sealord:0 "Quem domina o mar domina o mundo. Frotas baratas e corsários eficientes, à custa do exército terrestre."
+ smartai_ps_diplomat:0 "Doutrina: Hegemon Diplomático"
+ desc_smartai_ps_diplomat:0 "Vassalos, garantias e casamentos reais. O reino protege os pequenos para um dia absorvê-los."
+ smartai_ps_vulture:0 "Doutrina: Abutre Oportunista"
+ desc_smartai_ps_vulture:0 "Por que lutar com um vizinho descansado? Melhor esperar que ele esteja preso em outra guerra."
+ smartai_ps_scholar:0 "Doutrina: Reformista Iluminado"
+ desc_smartai_ps_scholar:0 "Livros antes de canhões. Ideias e tecnologias custam menos, mas a tradição militar se perde rápido."
+ smartai_ps_wildcard:0 "Doutrina: Rei Imprevisível"
+ desc_smartai_ps_wildcard:0 "Ninguém sabe o que o soberano fará amanhã, talvez nem ele mesmo."
+
+ # --- Eventos ocultos (o jogador nao ve, mas o jogo exige texto) ---
+ smartai.1.t:0 "Uma Nova Doutrina"
+ smartai.1.d:0 "A corte escolheu um rumo para o reino."
+ smartai.1.a:0 "Assim será."
+ smartai.2.t:0 "Nova Geração, Novas Ambições"
+ smartai.2.d:0 "Os velhos conselheiros se foram e a corte repensa sua estratégia."
+ smartai.2.a:0 "Os tempos mudaram."
+ smartai.4.t:0 "Consulta Diplomática"
+ smartai.4.d:0 "Embaixadores estrangeiros fazem perguntas."
+ smartai.4.a:0 "Respondam com cautela."
+ smartai.5.t:0 "Mudança de Comando"
+ smartai.5.d:0 "Um novo líder assume o reino."
+ smartai.5.a:0 "Ok."
+ smartai.10.t:0 "Conselho de Guerra"
+ smartai.10.d:0 "A corte revisa seus planos."
+ smartai.10.a:0 "Ok."
+
+ # --- Relatorio dos embaixadores (visivel ao jogador) ---
+ smartai.3.t:0 "Relatório dos Embaixadores: [From.GetName]"
+ smartai.3.d.conqueror:0 "Nossos embaixadores em [From.GetName] trazem notícias preocupantes: a corte adotou a doutrina do §YConquistador Implacável§!. Eles procuram vizinhos fracos e forjam reivindicações sobre suas terras. Se formos mais fracos que eles, devemos buscar aliados."
+ smartai.3.d.merchant:0 "Em [From.GetName], os mercadores mandam. A doutrina do §YPríncipe Mercador§! faz deles parceiros pacíficos, mas também concorrentes ferozes nas rotas de comércio."
+ smartai.3.d.builder:0 "[From.GetName] adotou a doutrina do §YArquiteto do Reino§!. Estão investindo em construções e desenvolvimento e preferem a paz; em algumas décadas serão muito mais ricos."
+ smartai.3.d.zealot:0 "Os sacerdotes de [From.GetName] pregam a doutrina do §YFanático Zeloso§!. Quem não compartilha a fé deles deve se preparar para a guerra; quem compartilha encontrará um aliado."
+ smartai.3.d.colonizer:0 "Os navios de [From.GetName] partem cheios de colonos. A doutrina do §YExplorador Ultramarino§! voltou os olhos deles para o além-mar, e o exército em casa ficou menor."
+ smartai.3.d.schemer:0 "[From.GetName] adotou a doutrina do §YTecelão de Intrigas§!. Eles fazem amizade com qualquer um que odeie os mesmos rivais que eles. Cuidado com quem você chama de inimigo."
+ smartai.3.d.turtle:0 "[From.GetName] se fechou atrás de muralhas: a doutrina da §YFortaleza Eterna§! os torna difíceis de invadir, mas também pouco interessados em conquistar."
+ smartai.3.d.sealord:0 "A frota de [From.GetName] cresce a cada ano. Sob a doutrina do §YSenhor dos Mares§!, eles atacam vizinhos com litoral e usam corsários sem pudor."
+ smartai.3.d.diplomat:0 "[From.GetName] adotou a doutrina do §YHegemon Diplomático§!. Oferecem proteção aos pequenos e amizade aos grandes; quem aceita a proteção muitas vezes acaba como vassalo."
+ smartai.3.d.vulture:0 "Os generais de [From.GetName] seguem a doutrina do §YAbutre Oportunista§!. Se entrarmos em guerra com outra nação, eles podem nos atacar pelas costas."
+ smartai.3.d.scholar:0 "Em [From.GetName] reina a doutrina do §YReformista Iluminado§!. Universidades e reformas avançam rápido, enquanto o exército perde tradição."
+ smartai.3.d.wildcard:0 "Ninguém entende o soberano de [From.GetName]. A doutrina do §YRei Imprevisível§! faz com que ele mude de amigos, inimigos e até de personalidade sem aviso."
+ smartai.3.a:0 "Interessante..."
+
+ # --- Decisoes ---
+ smartai_consult_ambassadors_title:0 "Consultar Embaixadores"
+ smartai_consult_ambassadors_desc:0 "Pedimos aos nossos embaixadores um relatório sobre a doutrina de cada vizinho e rival."
+ smartai_notifications_disable_title:0 "Ignorar Relatórios Automáticos"
+ smartai_notifications_disable_desc:0 "Não queremos mais receber relatórios automáticos quando um vizinho ou rival muda de doutrina."
+ smartai_notifications_enable_title:0 "Receber Relatórios Automáticos"
+ smartai_notifications_enable_desc:0 "Voltar a receber relatórios automáticos quando um vizinho ou rival muda de doutrina."
