@@ -10,7 +10,8 @@
 #  diretamente, e as reações a guerra só rodam quando a guerra acontece.
 # ==========================================================================
 
-# Escopo: país. Só em partidas novas.
+# Escopo: país. Dispara na partida nova e também a cada save carregado;
+# pop_iniciar_partida só inicializa o que ainda não tem dados.
 on_startup = {
 	pop_iniciar_partida = yes
 }

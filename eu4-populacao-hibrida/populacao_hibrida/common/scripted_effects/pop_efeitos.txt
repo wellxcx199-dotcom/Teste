@@ -6,7 +6,7 @@
 #
 #  Variáveis do EU4 são números de ponto fixo com 3 casas decimais
 #  (precisão 0.001, máximo ~2 147 483). Por isso as taxas são guardadas
-#  "por mil" (6 = 0,6% ao ano) e só divididas por 1000 depois de
+#  "por mil" (15 = 1,5% ao ano) e só divididas por 1000 depois de
 #  multiplicadas pela população; assim não perdemos as casas decimais.
 #
 #  Variáveis persistentes de PROVÍNCIA:
@@ -820,15 +820,26 @@ pop_marcar_colonia = {
 	}
 }
 
-# Escopo: PAÍS. Início de partida nova: inicializa tudo de uma vez durante
-# o carregamento (custo único) para que o mapa já tenha dados no dia 1.
+# Escopo: PAÍS. Chamado pelo on_startup, que o EU4 dispara na partida nova
+# E TAMBÉM toda vez que um save é carregado. Por isso só inicializa o que
+# ainda não tem dados: carregar o save não pode zerar a população.
+# Na partida nova, isso deixa o mapa com dados já no dia 1.
 pop_iniciar_partida = {
-	pop_iniciar_pais = yes
-	every_owned_province = {
-		limit = { is_city = yes }
-		pop_iniciar_provincia = yes
+	if = {
+		limit = {
+			num_of_cities = 1
+			NOT = { has_country_flag = pop_pais_iniciado }
+		}
+		pop_iniciar_pais = yes
+		every_owned_province = {
+			limit = {
+				is_city = yes
+				NOT = { has_province_flag = pop_iniciada }
+			}
+			pop_iniciar_provincia = yes
+		}
+		pop_fechar_ciclo_nacional = yes
 	}
-	pop_fechar_ciclo_nacional = yes
 }
 
 

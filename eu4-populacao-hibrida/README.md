@@ -6,13 +6,15 @@ O mod foi escrito para a versão 1.37 do EU4 e depende de os `on_actions` serem 
 
 ## Estrutura da pasta
 
-A pasta `populacao_hibrida/` é o mod em si, e o arquivo `populacao_hibrida.mod` é o que o launcher do jogo lê para saber que o mod existe. A pasta `ferramentas/` tem três scripts em Python que não vão para o jogo: o validador, o simulador e o instalador do painel de província. A pasta `docs/` tem o relatório da investigação de desempenho.
+A pasta `populacao_hibrida/` é o mod em si, e o arquivo `populacao_hibrida.mod` é o que o launcher do jogo lê para saber que o mod existe. O `INSTALAR.bat` copia os dois para o lugar certo no Windows. A pasta `ferramentas/` tem três scripts em Python que não vão para o jogo: o validador, o simulador e o instalador do painel de província. A pasta `docs/` tem o relatório da investigação de desempenho.
 
 Dentro do mod, cada pasta tem um papel. `common/scripted_effects/pop_efeitos.txt` é o motor da simulação, com todo o cálculo de crescimento, urbanização, migração e economia. `common/on_actions/pop_on_actions.txt` liga esse motor aos momentos em que o jogo chama o mod (início da partida, todo mês, fim de cerco). `common/event_modifiers/pop_modificadores.txt` define os bônus e penalidades de cada faixa de população. `decisions/` e `events/` formam a interface: o Painel Demográfico e as camadas de mapa. `localisation/` tem todos os textos em português, e `customizable_localization/` tem os textos que mudam de acordo com o estado do jogo, como "ligada" ou "desligada".
 
 ## Instalação
 
-Copie a pasta `populacao_hibrida` e o arquivo `populacao_hibrida.mod` para a pasta de mods do jogo, que no Windows fica em `Documentos/Paradox Interactive/Europa Universalis IV/mod/`. O resultado deve ficar assim:
+O jeito mais fácil no Windows é extrair o zip inteiro e dar dois cliques em `INSTALAR.bat`. O instalador pergunta ao Windows onde fica a sua pasta Documentos de verdade, o que importa porque, com o OneDrive ligado, ela costuma ser `C:\Users\NOME\OneDrive\Documentos` e não `C:\Users\NOME\Documents`. Depois ele copia o mod para a pasta `mod` do jogo e confere se a cópia deu certo.
+
+Para instalar à mão, copie a pasta `populacao_hibrida` e o arquivo `populacao_hibrida.mod` para `Documentos/Paradox Interactive/Europa Universalis IV/mod/`. O resultado precisa ficar exatamente assim, com o arquivo `.mod` direto dentro de `mod` e não numa subpasta:
 
 ```
 Documentos/Paradox Interactive/Europa Universalis IV/mod/
@@ -22,7 +24,17 @@ Documentos/Paradox Interactive/Europa Universalis IV/mod/
         common/ ...
 ```
 
-Depois abra o launcher, crie ou edite uma playlist e ative "Populacao Hibrida". Como o mod mexe com a economia, as conquistas (achievements) ficam desativadas, como em qualquer mod de jogabilidade.
+Depois abra o launcher, vá em **Playsets**, adicione "Populacao Hibrida" a um playset e clique em **Jogar** com esse playset selecionado. Como o mod mexe com a economia, as conquistas (achievements) ficam desativadas, como em qualquer mod de jogabilidade, e saves Ironman feitos sem o mod não abrem com ele.
+
+## Solução de problemas
+
+**O mod não aparece no launcher.** Quase sempre é a pasta no lugar errado. O erro mais comum é o "Extrair tudo" do Windows criar uma subpasta com o nome do zip, deixando o arquivo em `mod/populacao_hibrida_eu4/populacao_hibrida.mod`, onde o launcher não procura. O segundo mais comum é o OneDrive: o mod está em `Documents`, mas o jogo usa `OneDrive/Documentos`. Para saber qual pasta o jogo usa, veja onde ficam os saves dele (a pasta `save games` fica ao lado da pasta `mod`). Usar o `INSTALAR.bat` resolve os dois casos. Se mesmo assim não aparecer, feche o launcher por completo e abra de novo, porque ele só procura mods novos ao iniciar.
+
+**O mod aparece, mas nada muda no jogo.** O mod não cria botão novo na tela principal nem modo de mapa novo. Tudo começa pela aba **Decisões** (o ícone de pergaminho no menu do país), na decisão **Painel Demográfico**. Se ela não estiver lá, confira se o playset com o mod é o que está selecionado quando você clica em Jogar. O painel na janela da província só aparece depois de rodar o instalador do painel, explicado abaixo.
+
+**A decisão aparece, mas o painel mostra zero.** Em partida nova, os dados são criados no carregamento. Num save antigo, criado sem o mod, os dados aparecem aos poucos nos primeiros três meses de jogo, conforme cada país faz o primeiro processamento.
+
+**Aparece algum erro.** Abra `Documentos/Paradox Interactive/Europa Universalis IV/logs/error.log` logo depois de fechar o jogo e procure as linhas que contêm `pop_`. São essas linhas que dizem o que falhou neste mod.
 
 ### Painel na janela da província (opcional)
 
