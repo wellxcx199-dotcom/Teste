@@ -36,7 +36,7 @@ Depois abra o launcher, vá em **Playsets**, adicione "Populacao Hibrida" a um p
 
 **A decisão aparece, mas o painel mostra zero.** Isso é normal no começo. Cada país prepara os dados das suas províncias no primeiro processamento, e os países se revezam ao longo dos primeiros três meses de jogo. Deixe o jogo correr até março de 1445 e abra o painel de novo.
 
-**O jogo trava (aparece um `exception.txt` em `logs`).** A versão 0.1.0 fazia a inicialização de todas as províncias do mundo dentro do `on_startup`, no início da partida. Trabalho pesado dentro de um `on_action` é uma causa conhecida de travamento no EU4, e a versão atual não faz mais isso. Se ainda travar, anote em que momento travou (na barra de carregamento, no menu principal, ao clicar em Jogar ou depois de alguns dias de jogo) e mande o `exception.txt`, o `error.log` e o relatório do `DIAGNOSTICO.bat`.
+**O jogo trava (aparece um `exception.txt` em `logs`).** As versões 0.1 e 0.2 travavam ao carregar por causa de colchetes num texto de depuração dentro de um scripted effect. A história completa está em `docs/DESEMPENHO.md`, e a versão 0.3.0 corrige o problema. Se ainda travar, anote em que momento travou (na barra de carregamento, no menu principal, ao clicar em Jogar ou depois de alguns dias de jogo) e mande o `exception.txt`, o `minidump.dmp`, o `error.log` e o relatório do `DIAGNOSTICO.bat`. O `minidump.dmp` foi o arquivo que revelou a causa da última vez.
 
 **Aparece algum erro.** Abra `Documentos/Paradox Interactive/Europa Universalis IV/logs/error.log` logo depois de fechar o jogo e procure as linhas que contêm `pop_`. São essas linhas que dizem o que falhou neste mod.
 
@@ -118,6 +118,8 @@ A explicação completa está em `docs/DESEMPENHO.md`. Em resumo, cada país pro
 `python ferramentas/simular_provincia.py --dev 5 --guerra 1460-1466` roda a conta de uma província fora do jogo, com a mesma aritmética de 3 casas decimais do EU4, nos três modos de desempenho. Foi com ele que a taxa base subiu de 0,6% para 1,5% ao ano: com 0,6%, uma província levava mais de um século para se recuperar de seis anos de guerra.
 
 `python ferramentas/instalar_painel_provincia.py` foi explicado na instalação.
+
+`python ferramentas/analisar_minidump.py minidump.dmp` procura a causa de um travamento no arquivo `minidump.dmp` que o EU4 grava quando fecha com erro. Ele acha a thread com a pilha cheia, mostra o ciclo de chamadas repetidas e lista os textos presos na pilha. Foi assim que o travamento das versões 0.1 e 0.2 foi resolvido: o texto `oot.GetName` aparecia 14 886 vezes. Ele precisa da biblioteca `minidump`, que se instala com `pip install minidump`.
 
 ## O que testar primeiro
 

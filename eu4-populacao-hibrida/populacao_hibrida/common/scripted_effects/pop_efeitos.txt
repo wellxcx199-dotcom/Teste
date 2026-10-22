@@ -18,6 +18,13 @@
 #    pop_migrantes, pop_fator_tempo
 #
 #  Veja docs/DESEMPENHO.md para a explicação do agendamento em lotes.
+#
+#  ATENÇÃO: nunca use colchetes neste arquivo, nem em comentários nem em
+#  textos de log. Dentro de scripted effects o EU4 reserva os colchetes
+#  para a sintaxe de parâmetro opcional, e um texto como Root.GetName entre
+#  colchetes faz o jogo entrar em recursão infinita ao carregar o arquivo
+#  (EXCEPTION_STACK_OVERFLOW). Os logs de depuração ficam em
+#  events/pop_motor.txt, onde colchetes funcionam normalmente.
 # ==========================================================================
 
 
@@ -116,10 +123,6 @@ pop_executar_tick = {
 	}
 	else = {
 		pop_processar_lote = { lote = 3 }
-	}
-	if = {
-		limit = { has_global_flag = pop_debug }
-		log = "POP | [Root.GetName] | lote [Root.pop_lote.GetValue] | provincias: [Root.pop_provs_tick.GetValue]"
 	}
 	change_variable = { which = pop_lote value = 1 }
 	if = {
@@ -797,10 +800,6 @@ pop_fechar_ciclo_nacional = {
 			limit = { is_variable_equal = { which = pop_t1 value = 4 } }
 			add_country_modifier = { name = pop_sociedade_urbana duration = -1 }
 		}
-	}
-	if = {
-		limit = { has_global_flag = pop_debug }
-		log = "POP | [Root.GetName] | ciclo nacional: [Root.pop_nac_total.GetValue] mil hab, [Root.pop_nac_pct_urbana.GetValue]% urbano"
 	}
 }
 

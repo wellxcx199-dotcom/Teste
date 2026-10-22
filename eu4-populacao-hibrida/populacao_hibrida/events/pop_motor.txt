@@ -19,6 +19,17 @@ country_event = {
 
 	immediate = {
 		pop_executar_tick = yes
+		# Depuração: os logs ficam AQUI, no evento, e não nos scripted
+		# effects. Lá dentro os colchetes de localização travam o jogo.
+		if = {
+			limit = { has_global_flag = pop_debug }
+			log = "POP - [Root.GetName] - provincias processadas neste tick: [Root.pop_provs_tick.GetValue]"
+			if = {
+				# pop_lote volta a 0 quando o tick fecha um ciclo completo
+				limit = { is_variable_equal = { which = pop_lote value = 0 } }
+				log = "POP - [Root.GetName] - ciclo nacional: [Root.pop_nac_total.GetValue] mil habitantes, [Root.pop_nac_pct_urbana.GetValue] por cento urbano"
+			}
+		}
 	}
 
 	option = {

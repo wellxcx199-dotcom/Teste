@@ -12,7 +12,8 @@ mais quebram mods do EU4 sem aviso claro:
   4. eventos chamados que não existem e scripted effects/triggers
      chamados com "= yes" que não foram definidos;
   5. modificadores aplicados que não foram definidos;
-  6. variáveis lidas que nunca são escritas (geralmente erro de digitação).
+  6. variáveis lidas que nunca são escritas (geralmente erro de digitação);
+  7. colchetes em scripted effects/triggers, que travam o jogo ao carregar.
 
 Uso:  python ferramentas/validar_mod.py
 Sai com código 1 se encontrar erro.
@@ -65,6 +66,30 @@ def checar_chaves(caminho: Path, texto: str) -> None:
         erros.append(f"{caminho}: {nivel} chave(s) '{{' sem fechar")
 
 
+def checar_colchetes_em_macros(caminho: Path) -> None:
+    """Colchetes em scripted effects/triggers travam o EU4 ao carregar.
+
+    Nesses arquivos o jogo reserva '[' para a sintaxe de parâmetro opcional
+    ('[[param] ... ]'). Um texto de localização como '[Root.GetName]' num
+    log fez o jogo entrar em recursão infinita (EXCEPTION_STACK_OVERFLOW,
+    confirmado no minidump). Só a forma '[[param]' e o ']' que a fecha
+    são aceitos, e nunca dentro de aspas ou de comentários.
+    """
+    for n, linha in enumerate(caminho.read_text(encoding="utf-8-sig").splitlines(), 1):
+        if "[" not in linha and "]" not in linha:
+            continue
+        codigo = sem_comentarios(linha)
+        if "[" in linha[len(codigo):] or "]" in linha[len(codigo):]:
+            erros.append(f"{caminho}:{n}: colchete em comentário de scripted effect/trigger")
+        if re.search(r'"[^"]*[\[\]][^"]*"', codigo):
+            erros.append(f"{caminho}:{n}: colchete dentro de texto em scripted effect/trigger "
+                         "(trava o jogo; ponha o log num evento)")
+            continue
+        resto = re.sub(r"\[\[\w+\]", "", re.sub(r'"[^"]*"', "", codigo)).replace("]", "")
+        if "[" in resto:
+            erros.append(f"{caminho}:{n}: colchete fora da sintaxe [[parametro] em scripted effect/trigger")
+
+
 def blocos_de_topo(texto: str) -> list[tuple[str, str]]:
     """Devolve (nome, corpo) de cada bloco 'nome = { ... }' no nível 0."""
     resultado = []
@@ -110,6 +135,8 @@ def main() -> int:
     textos = {p: ler_script(p) for p in arquivos}
     for p, t in textos.items():
         checar_chaves(p, t)
+        if p.parent.name in ("scripted_effects", "scripted_triggers"):
+            checar_colchetes_em_macros(p)
 
     loc = carregar_localizacao()
 

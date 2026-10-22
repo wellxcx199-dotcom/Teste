@@ -52,7 +52,13 @@ Cada província guarda em `pop_faixa_r`, `pop_faixa_u` e `pop_faixa_p` qual faix
 
 Os ganchos do jogo (`on_actions`) só fazem contas mínimas. Quando chega a vez de um país, o pulso mensal dispara o evento oculto `pop_motor.1`, e é dentro dele que as províncias são processadas. Isso custa um evento a cada 2, 3 ou 6 meses por país, e não um evento por província.
 
-Essa regra veio de um travamento real. A primeira versão do mod inicializava todas as províncias do mundo dentro do `on_startup`, e o jogo fechou com `EXCEPTION_STACK_OVERFLOW`. Sem acesso ao código do jogo não dá para provar que foi exatamente isso, mas é a suspeita principal: o Anbennar, um dos maiores mods de EU4, tem vários comentários no próprio código sobre isso: lógica movida "para um evento para evitar travamentos", eventos atrasados em um dia "para não causar travamentos" e o aviso de que um evento pesado no início pode causar "tela preta ao iniciar". Por isso a versão atual não inicializa nada no `on_startup`. Cada país prepara as suas províncias no primeiro processamento, e como os países começam em meses sorteados, essa preparação fica espalhada pelos três primeiros meses de jogo.
+Isso segue uma prática documentada no código do Anbennar, um dos maiores mods de EU4. Os autores deixaram comentários sobre lógica movida "para um evento para evitar travamentos", sobre eventos atrasados em um dia "para não causar travamentos" e sobre um evento pesado no início que pode causar "tela preta ao iniciar". Por isso a versão atual também não inicializa nada no `on_startup`. Cada país prepara as suas províncias no primeiro processamento, e como os países começam em meses sorteados, essa preparação fica espalhada pelos três primeiros meses de jogo.
+
+### O travamento que aconteceu de verdade
+
+As versões 0.1 e 0.2 fechavam o jogo durante o carregamento com `EXCEPTION_STACK_OVERFLOW`. O relatório `exception.txt` não ajudava, porque só mostrava mais de mil chamadas sem nome dentro do `eu4.exe`. O `minidump.dmp`, que guarda a memória do jogo no momento do travamento, resolveu o caso. Uma das threads estava com a pilha cheia (4 084 KB de 4 096 KB), com o mesmo ciclo de 3 funções repetido 14 886 vezes, e em cada nível do ciclo estava o texto `oot.GetName`, um pedaço de `[Root.GetName]`.
+
+Esse texto vinha de duas linhas de depuração dentro de `pop_efeitos.txt`, como `log = "POP | [Root.GetName] | ..."`. Dentro de scripted effects o EU4 reserva os colchetes para a sintaxe de parâmetro opcional, `[[parametro] ... ]`, e tentar interpretar `[Root.GetName]` dessa forma fazia o jogo entrar num laço infinito ao ler o arquivo. A mesma linha dentro de um evento funciona normalmente. A correção foi levar os logs para o evento `pop_motor.1`, e o validador agora recusa qualquer colchete em scripted effects e triggers fora da sintaxe de parâmetro.
 
 ### Ganchos em vez de vigilância
 
@@ -83,7 +89,7 @@ Como o EU4 não tem um medidor de desempenho para scripts, a forma confiável de
 Para ver o que o mod está fazendo, ligue o "registro de depuração" em Painel Demográfico → Regras. Cada tick escreve no arquivo `game.log` (em `Documentos/Paradox Interactive/Europa Universalis IV/logs/`) uma linha como esta:
 
 ```
-POP | France | lote 2 | provincias: 11
+POP - France - provincias processadas neste tick: 11
 ```
 
 Se aparecerem números muito maiores do que um quarto das províncias do país, ou muitos países no mesmo dia, algo no agendamento está errado. Desligue o registro depois de testar, porque escrever no log também custa.
