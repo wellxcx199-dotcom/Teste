@@ -1,0 +1,31 @@
+# ==========================================================================
+#  População Híbrida - ganchos (on_actions)
+#
+#  Desde a versão 1.36 do EU4 os on_actions são ADITIVOS: este arquivo se
+#  soma ao do jogo base em vez de substituí-lo, então não copiamos nada do
+#  vanilla e o mod continua compatível com patches e outros mods.
+#
+#  Regra de desempenho usada aqui: nada de eventos com mean_time_to_happen
+#  nem eventos ocultos disparados todo mês. Os pulsos chamam efeitos
+#  diretamente, e as reações a guerra só rodam quando a guerra acontece.
+# ==========================================================================
+
+# Escopo: país. Só em partidas novas.
+on_startup = {
+	pop_iniciar_partida = yes
+}
+
+# Escopo: país. Uma conta barata por mês; o trabalho real é escalonado.
+on_monthly_pulse = {
+	pop_pulso_mensal = yes
+}
+
+# Escopo: província. Cerco vencido: fome e fuga reduzem a população.
+on_siege_won_province = {
+	pop_efeito_cerco = yes
+}
+
+# Escopo: província colonial. Marca a colônia para nascer pequena.
+on_colonial_pulse = {
+	pop_marcar_colonia = yes
+}

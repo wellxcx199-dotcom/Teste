@@ -1,0 +1,26 @@
+# ==========================================================================
+#  População Híbrida - gatilhos reutilizáveis (scripted triggers)
+# ==========================================================================
+
+# Escopo: PAÍS. O sistema roda para este país neste mês?
+pop_pais_simulado = {
+	NOT = { has_global_flag = pop_sistema_pausado }
+	num_of_cities = 1
+}
+
+# Escopo: PROVÍNCIA. A província já tem dados populacionais?
+pop_provincia_ativa = {
+	has_province_flag = pop_iniciada
+	is_city = yes
+}
+
+# Escopo: PROVÍNCIA, chamado de dentro de provinces_to_highlight
+# (ROOT = país que está olhando o mapa). Limita a camada ao próprio
+# país, a não ser que o jogador tenha ligado o "mapa mundial".
+pop_visivel_no_mapa = {
+	has_province_flag = pop_iniciada
+	OR = {
+		owned_by = ROOT
+		has_global_flag = pop_mapa_mundial
+	}
+}

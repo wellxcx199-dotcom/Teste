@@ -1,0 +1,87 @@
+# ==========================================================================
+#  População Híbrida - modificadores estáticos
+#
+#  O EU4 não aceita "imposto = população x 0,01" num modificador, então a
+#  população é convertida em FAIXAS e cada faixa tem um bônus fixo.
+#  Faixas neutras (rural 2 e urbana 1) não têm modificador nenhum: menos
+#  modificadores ativos = menos recálculo e uma interface mais limpa.
+#  Nome de arquivo próprio (pop_*) para NÃO sobrescrever o 00_event_modifiers
+#  do jogo base.
+# ==========================================================================
+
+# ---------- Rural: camponeses dão imposto e soldados ----------
+pop_rural_1 = {	# menos de 25 mil camponeses
+	local_tax_modifier = -0.1
+	local_manpower_modifier = -0.1
+}
+pop_rural_3 = {	# 60 a 120 mil
+	local_tax_modifier = 0.05
+	local_manpower_modifier = 0.05
+}
+pop_rural_4 = {	# 120 a 200 mil
+	local_tax_modifier = 0.1
+	local_manpower_modifier = 0.1
+}
+pop_rural_5 = {	# 200 a 320 mil
+	local_tax_modifier = 0.15
+	local_manpower_modifier = 0.15
+	supply_limit_modifier = 0.1
+}
+pop_rural_6 = {	# mais de 320 mil
+	local_tax_modifier = 0.2
+	local_manpower_modifier = 0.2
+	supply_limit_modifier = 0.2
+	local_unrest = 1
+}
+
+# ---------- Urbana: burgueses e artesãos dão produção, comércio e ideias ----------
+pop_urbana_2 = {	# 5 a 15 mil urbanos
+	local_production_efficiency = 0.05
+}
+pop_urbana_3 = {	# 15 a 40 mil
+	local_production_efficiency = 0.1
+	province_trade_power_modifier = 0.05
+}
+pop_urbana_4 = {	# 40 a 100 mil
+	local_production_efficiency = 0.15
+	province_trade_power_modifier = 0.1
+	local_institution_spread = 0.1
+}
+pop_urbana_5 = {	# 100 a 250 mil
+	local_production_efficiency = 0.2
+	province_trade_power_modifier = 0.15
+	local_institution_spread = 0.2
+	local_unrest = 1
+}
+pop_urbana_6 = {	# mais de 250 mil: metrópole
+	local_production_efficiency = 0.25
+	province_trade_power_modifier = 0.2
+	local_institution_spread = 0.3
+	local_unrest = 2
+}
+
+# ---------- Pressão demográfica ----------
+pop_subpovoada = {	# menos de 50% da capacidade
+	local_development_cost = -0.1
+	local_tax_modifier = -0.05
+}
+pop_superpovoada = {	# mais de 115% da capacidade
+	local_unrest = 2
+	local_development_cost = 0.1
+	supply_limit_modifier = -0.1
+}
+
+# ---------- Nacional: estrutura da sociedade ----------
+pop_sociedade_agraria = {	# menos de 10% urbana
+	global_manpower_modifier = 0.05
+	production_efficiency = -0.05
+}
+pop_sociedade_mercantil = {	# 20% a 30% urbana
+	trade_efficiency = 0.05
+	production_efficiency = 0.05
+}
+pop_sociedade_urbana = {	# mais de 30% urbana
+	trade_efficiency = 0.1
+	production_efficiency = 0.1
+	global_unrest = 1
+}

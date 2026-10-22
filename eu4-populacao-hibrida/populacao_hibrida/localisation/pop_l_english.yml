@@ -1,0 +1,105 @@
+﻿l_english:
+ # ------------------------------------------------------------------
+ # O EU4 não tem idioma português oficial; o padrão da comunidade é
+ # escrever o texto traduzido no arquivo l_english. Este arquivo precisa
+ # ser UTF-8 COM BOM, senão o jogo ignora os acentos (ou o arquivo todo).
+ # ------------------------------------------------------------------
+
+ # ---------------- Decisões ----------------
+ pop_abrir_painel_title:0 "Painel Demográfico"
+ pop_abrir_painel_desc:0 "Abre o painel da População Híbrida: estatísticas da população, camadas de mapa e configurações de desempenho."
+ pop_camada_superpovoadas_title:0 "Mapa: províncias superpovoadas"
+ pop_camada_superpovoadas_desc:0 "Clique nesta decisão para destacar no mapa as províncias com população acima da capacidade de sustento. Elas geram revolta e empurram emigrantes. Aceitar a decisão desliga a camada."
+ pop_camada_subpovoadas_title:0 "Mapa: províncias subpovoadas"
+ pop_camada_subpovoadas_desc:0 "Destaca as províncias com menos de 60% da capacidade ocupada. São bons destinos para migrantes e mais baratas de desenvolver. Aceitar a decisão desliga a camada."
+ pop_camada_cidades_title:0 "Mapa: grandes centros urbanos"
+ pop_camada_cidades_desc:0 "Destaca as províncias com pelo menos 40 mil habitantes urbanos, os motores de produção e comércio do país. Aceitar a decisão desliga a camada."
+ pop_camada_destinos_title:0 "Mapa: destinos de migração"
+ pop_camada_destinos_desc:0 "Destaca as províncias com atratividade 4 ou mais, para onde a população tende a se mudar. Aceitar a decisão desliga a camada."
+ pop_camada_declinio_title:0 "Mapa: população em declínio"
+ pop_camada_declinio_desc:0 "Destaca as províncias que perderam população no último processamento, por guerra, devastação, superlotação ou emigração. Aceitar a decisão desliga a camada."
+
+ # ---------------- Menu principal ----------------
+ pop_menu.1.t:0 "Painel Demográfico"
+ pop_menu.1.d:0 "Situação demográfica de [Root.GetName]:\n\nPopulação total: §Y[Root.pop_nac_total.GetValue]§! mil habitantes\nUrbanos (burgueses e artesãos): §G[Root.pop_nac_urbanos.GetValue]§! mil\nCamponeses: §Y[Root.pop_nac_camponeses.GetValue]§! mil\nUrbanização: §Y[Root.pop_nac_pct_urbana.GetValue]%§!\nMaior centro urbano: [Root.GetPopMaiorCidade]\n\nNo último ciclo completo:\nVariação da população: [Root.pop_nac_variacao.GetValue] mil\nEmigrantes que deixaram províncias pressionadas: [Root.pop_migrantes_ultimo.GetValue] mil\n\nModo de simulação: [Root.GetPopModo]\nSistema: [Root.GetPopSistema]"
+ pop_menu.1.mapas:0 "Camadas de mapa"
+ pop_menu.1.desempenho:0 "Desempenho"
+ pop_menu.1.regras:0 "Regras da simulação"
+ pop_menu.1.ajuda:0 "Como funciona?"
+ pop_menu.1.fechar:0 "Fechar"
+ pop_menu.voltar:0 "Voltar"
+
+ # ---------------- Camadas de mapa ----------------
+ pop_menu.2.t:0 "Camadas de mapa"
+ pop_menu.2.d:0 "O EU4 não permite criar modos de mapa novos, mas uma decisão pode destacar províncias no mapa.\n\nEscolha uma camada abaixo. Depois abra a aba §YDecisões§! e clique na decisão que começa com §YMapa:§! para ver as províncias destacadas. Só uma camada fica ativa por vez.\n\nAlcance atual das camadas: [Root.GetPopEscopoMapa] (pode ser mudado em Regras da simulação)."
+ pop_menu.2.super:0 "Superpovoadas (acima da capacidade)"
+ pop_menu.2.sub:0 "Subpovoadas (abaixo de 60%)"
+ pop_menu.2.cidades:0 "Grandes centros urbanos"
+ pop_menu.2.destinos:0 "Destinos de migração"
+ pop_menu.2.declinio:0 "População em declínio"
+ pop_menu_camada_tt:0 "Abra a aba §YDecisões§! e clique na decisão §YMapa: ...§! para ver a camada."
+
+ # ---------------- Desempenho ----------------
+ pop_menu.3.t:0 "Desempenho da simulação"
+ pop_menu.3.d:0 "A simulação não processa todas as províncias ao mesmo tempo. Cada país trabalha em um quarto das suas províncias por vez, em meses diferentes dos outros países, para o jogo não engasgar.\n\n§YAlto detalhe§!: cada província a cada 8 meses e migração entre países.\n§YEquilibrado§!: cada província a cada 12 meses.\n§YLeve§!: cada província a cada 24 meses e sem migração na IA.\n\nCom a §YIA simplificada§!, os países controlados pelo computador são processados com a metade da frequência. As taxas são ajustadas ao tamanho do passo, então o resultado de longo prazo é parecido em todos os modos.\n\nModo atual: [Root.GetPopModo]\nIA: [Root.GetPopIA]"
+ pop_menu.3.alto:0 "Usar Alto detalhe"
+ pop_menu.3.equilibrado:0 "Usar Equilibrado (padrão)"
+ pop_menu.3.leve:0 "Usar Leve"
+ pop_menu.3.ia_detalhada:0 "Processar a IA com detalhe total"
+ pop_menu.3.ia_simplificada:0 "Voltar a simplificar a IA (padrão)"
+
+ # ---------------- Regras ----------------
+ pop_menu.4.t:0 "Regras da simulação"
+ pop_menu.4.d:0 "Migração entre províncias: [Root.GetPopMigracao]\nSuperpopulação gera desenvolvimento: [Root.GetPopDesenvolvimento]\nAlcance das camadas de mapa: [Root.GetPopEscopoMapa]\nSimulação: [Root.GetPopSistema]\nRegistro de depuração no game.log: [Root.GetPopDebug]\n\nEstas regras valem para todos os países da partida."
+ pop_menu.4.migracao_desligar:0 "Desligar a migração"
+ pop_menu.4.migracao_ligar:0 "Ligar a migração"
+ pop_menu.4.desenv_desligar:0 "Superpopulação não gera mais desenvolvimento"
+ pop_menu.4.desenv_ligar:0 "Superpopulação volta a gerar desenvolvimento"
+ pop_menu.4.mundo_ligar:0 "Camadas de mapa mostram o mundo todo"
+ pop_menu.4.mundo_desligar:0 "Camadas de mapa mostram só o meu país"
+ pop_menu.4.pausar:0 "Pausar a simulação"
+ pop_menu.4.retomar:0 "Retomar a simulação"
+ pop_menu.4.debug_ligar:0 "Ligar registro de depuração"
+ pop_menu.4.debug_desligar:0 "Desligar registro de depuração"
+
+ # ---------------- Ajuda ----------------
+ pop_menu.5.t:0 "Como funciona a População Híbrida"
+ pop_menu.5.d:0 "Cada província tem uma §Ycapacidade de sustento§! de 15 mil pessoas por ponto de desenvolvimento, aumentada por prosperidade, fazendas, capital e porto, e reduzida pela devastação.\n\nA população cresce de forma §Ylogística§!: rápido quando há espaço e cada vez mais devagar perto da capacidade. Acima dela, encolhe. Cercos, ocupação, saques e devastação causam perdas extras.\n\nA população se divide em §Ycamponeses§!, que geram imposto e soldados, e §Yurbanos§!, que geram produção, poder de comércio e difusão de instituições. A parcela urbana cresce com produção, centros de comércio, mercados, oficinas e manufaturas.\n\nProvíncias lotadas ou pouco atraentes mandam §Yemigrantes§! para vizinhas mais atraentes, e o excesso de gente acelera as suas colônias. Superpopulação persistente pode virar desenvolvimento novo.\n\nNo país, o grau de urbanização define se a sociedade é agrária, em transição, mercantil ou urbana."
+
+ # ---------------- Textos dinâmicos ----------------
+ pop_txt_modo_alto:0 "§YAlto detalhe§!"
+ pop_txt_modo_leve:0 "§YLeve§!"
+ pop_txt_modo_equilibrado:0 "§YEquilibrado§!"
+ pop_txt_ia_detalhada:0 "§Ydetalhe total§!"
+ pop_txt_ia_simplificada:0 "§Ysimplificada§!"
+ pop_txt_ligada:0 "§Gligada§!"
+ pop_txt_desligada:0 "§Rdesligada§!"
+ pop_txt_ligado:0 "§Gligado§!"
+ pop_txt_desligado:0 "§Rdesligado§!"
+ pop_txt_escopo_mundo:0 "§Yo mundo todo§!"
+ pop_txt_escopo_pais:0 "§Yapenas o seu país§!"
+ pop_txt_pausado:0 "§Rpausada§!"
+ pop_txt_rodando:0 "§Grodando§!"
+ pop_txt_maior_cidade:0 "§Y[pop_maior_cidade.GetName]§! ([Root.pop_nac_maior_cidade.GetValue] mil urbanos)"
+ pop_txt_sem_dados:0 "ainda sem dados"
+
+ # ---------------- Janela da província ----------------
+ pop_painel_provincia:0 "§YPopulação:§! [Root.pop_total.GetValue] mil | §G[Root.pop_urbanos.GetValue]§! urbanos"
+ pop_painel_provincia_tt:0 "§YDemografia de [Root.GetName]§!\nCamponeses: [Root.pop_camponeses.GetValue] mil\nUrbanos: [Root.pop_urbanos.GetValue] mil\nCapacidade de sustento: [Root.pop_capacidade.GetValue] mil\nOcupação da capacidade: [Root.pop_razao.GetValue] (1 = cheia)\nAtratividade para migrantes: [Root.pop_atratividade.GetValue]\nVariação no último processamento: [Root.pop_crescimento.GetValue] mil"
+
+ # ---------------- Modificadores ----------------
+ pop_rural_1:0 "Campo despovoado"
+ pop_rural_3:0 "Campo povoado"
+ pop_rural_4:0 "Campo denso"
+ pop_rural_5:0 "Celeiro populoso"
+ pop_rural_6:0 "Campo superlotado"
+ pop_urbana_2:0 "Vila mercantil"
+ pop_urbana_3:0 "Cidade"
+ pop_urbana_4:0 "Grande cidade"
+ pop_urbana_5:0 "Metrópole regional"
+ pop_urbana_6:0 "Metrópole"
+ pop_subpovoada:0 "Terras subpovoadas"
+ pop_superpovoada:0 "Superpopulação"
+ pop_sociedade_agraria:0 "Sociedade agrária"
+ pop_sociedade_mercantil:0 "Sociedade mercantil"
+ pop_sociedade_urbana:0 "Sociedade urbana"

@@ -1,0 +1,852 @@
+# ==========================================================================
+#  População Híbrida - motor da simulação (scripted effects)
+#
+#  Unidade: todas as variáveis pop_* de população estão em MILHARES de
+#  habitantes (pop_total = 64.5 significa 64 500 pessoas).
+#
+#  Variáveis do EU4 são números de ponto fixo com 3 casas decimais
+#  (precisão 0.001, máximo ~2 147 483). Por isso as taxas são guardadas
+#  "por mil" (6 = 0,6% ao ano) e só divididas por 1000 depois de
+#  multiplicadas pela população; assim não perdemos as casas decimais.
+#
+#  Variáveis persistentes de PROVÍNCIA:
+#    pop_total, pop_urbanos, pop_camponeses, pop_taxa_urbana,
+#    pop_capacidade, pop_razao (pop/capacidade), pop_atratividade,
+#    pop_crescimento (variação no último processamento), pop_lote,
+#    pop_faixa_r, pop_faixa_u, pop_faixa_p (faixa de modificador atual)
+#  Variáveis temporárias reaproveitadas: pop_t1, pop_t2, pop_t3,
+#    pop_migrantes, pop_fator_tempo
+#
+#  Veja docs/DESEMPENHO.md para a explicação do agendamento em lotes.
+# ==========================================================================
+
+
+# --------------------------------------------------------------------------
+#  AGENDADOR (escopo: PAÍS) - chamado todo mês por on_monthly_pulse
+# --------------------------------------------------------------------------
+# Custo mensal por país: uma soma e uma comparação. O trabalho pesado só
+# acontece quando o contador alcança o intervalo, e cada vez processa
+# apenas 1/4 das províncias do país.
+pop_pulso_mensal = {
+	if = {
+		limit = { pop_pais_simulado = yes }
+		if = {
+			limit = { NOT = { has_country_flag = pop_pais_iniciado } }
+			pop_iniciar_pais = yes
+		}
+		change_variable = { which = pop_contador value = 1 }
+		if = {
+			limit = { check_variable = { which = pop_contador which = pop_intervalo } }
+			set_variable = { which = pop_contador value = 0 }
+			pop_executar_tick = yes
+		}
+	}
+}
+
+# Escopo: PAÍS. Primeiros dados do país. O contador e o lote começam em
+# valores aleatórios para que os ~400 países NÃO processem todos no
+# mesmo mês (isso causaria um "engasgo" periódico no jogo).
+pop_iniciar_pais = {
+	set_country_flag = pop_pais_iniciado
+	pop_calcular_intervalo = yes
+	random_list = {
+		1 = { set_variable = { which = pop_contador value = 0 } }
+		1 = { set_variable = { which = pop_contador value = 1 } }
+		1 = { set_variable = { which = pop_contador value = 2 } }
+	}
+	random_list = {
+		1 = { set_variable = { which = pop_lote value = 0 } }
+		1 = { set_variable = { which = pop_lote value = 1 } }
+		1 = { set_variable = { which = pop_lote value = 2 } }
+		1 = { set_variable = { which = pop_lote value = 3 } }
+	}
+}
+
+# Escopo: PAÍS. Define de quantos em quantos meses o país processa um lote.
+#   Alto detalhe: 2 meses  -> cada província a cada 8 meses
+#   Equilibrado : 3 meses  -> cada província a cada 12 meses (padrão)
+#   Leve        : 6 meses  -> cada província a cada 24 meses
+# IA simplificada (padrão ligado) dobra o intervalo dos países da IA.
+# pop_fator_tempo = intervalo x 4 lotes / 12 meses: converte taxas anuais
+# para o tamanho real do passo, então o resultado de longo prazo é o mesmo
+# em todos os modos; só muda a "resolução" da simulação.
+pop_calcular_intervalo = {
+	if = {
+		limit = { has_global_flag = pop_modo_alto }
+		set_variable = { which = pop_intervalo value = 2 }
+	}
+	else_if = {
+		limit = { has_global_flag = pop_modo_leve }
+		set_variable = { which = pop_intervalo value = 6 }
+	}
+	else = {
+		set_variable = { which = pop_intervalo value = 3 }
+	}
+	if = {
+		limit = {
+			ai = yes
+			NOT = { has_global_flag = pop_ia_detalhada }
+		}
+		multiply_variable = { which = pop_intervalo value = 2 }
+	}
+	set_variable = { which = pop_fator_tempo which = pop_intervalo }
+	divide_variable = { which = pop_fator_tempo value = 3 }
+}
+
+# Escopo: PAÍS. Um "tick": processa o lote atual e avança para o próximo.
+pop_executar_tick = {
+	pop_calcular_intervalo = yes
+	set_variable = { which = pop_provs_tick value = 0 }
+	if = {
+		limit = { is_variable_equal = { which = pop_lote value = 0 } }
+		pop_processar_lote = { lote = 0 }
+	}
+	else_if = {
+		limit = { is_variable_equal = { which = pop_lote value = 1 } }
+		pop_processar_lote = { lote = 1 }
+	}
+	else_if = {
+		limit = { is_variable_equal = { which = pop_lote value = 2 } }
+		pop_processar_lote = { lote = 2 }
+	}
+	else = {
+		pop_processar_lote = { lote = 3 }
+	}
+	if = {
+		limit = { has_global_flag = pop_debug }
+		log = "POP | [Root.GetName] | lote [Root.pop_lote.GetValue] | provincias: [Root.pop_provs_tick.GetValue]"
+	}
+	change_variable = { which = pop_lote value = 1 }
+	if = {
+		limit = { check_variable = { which = pop_lote value = 4 } }
+		set_variable = { which = pop_lote value = 0 }
+		pop_fechar_ciclo_nacional = yes
+	}
+}
+
+# Escopo: PAÍS. Um único laço pelas províncias faz duas coisas:
+# inicializa províncias novas (conquistas, colônias que viraram cidade,
+# saves antigos) e atualiza as províncias do lote $lote$.
+pop_processar_lote = {
+	every_owned_province = {
+		limit = {
+			is_city = yes
+			OR = {
+				NOT = { has_province_flag = pop_iniciada }
+				is_variable_equal = { which = pop_lote value = $lote$ }
+			}
+		}
+		# PREV aqui é o país dono; copiamos o fator de tempo antes de
+		# qualquer outra mudança de escopo.
+		set_variable = { which = pop_fator_tempo which = PREV }
+		if = {
+			limit = { NOT = { has_province_flag = pop_iniciada } }
+			pop_iniciar_provincia = yes
+		}
+		pop_atualizar_provincia = yes
+		if = {
+			limit = { has_global_flag = pop_debug }
+			owner = { change_variable = { which = pop_provs_tick value = 1 } }
+		}
+	}
+}
+
+
+# --------------------------------------------------------------------------
+#  INICIALIZAÇÃO (escopo: PROVÍNCIA)
+# --------------------------------------------------------------------------
+pop_iniciar_provincia = {
+	set_province_flag = pop_iniciada
+	random_list = {
+		1 = { set_variable = { which = pop_lote value = 0 } }
+		1 = { set_variable = { which = pop_lote value = 1 } }
+		1 = { set_variable = { which = pop_lote value = 2 } }
+		1 = { set_variable = { which = pop_lote value = 3 } }
+	}
+	pop_calcular_capacidade = yes
+	set_variable = { which = pop_total which = pop_capacidade }
+	if = {
+		# Colônia recém-transformada em cidade: começa pequena e cresce.
+		limit = { has_province_flag = pop_era_colonia }
+		clr_province_flag = pop_era_colonia
+		multiply_variable = { which = pop_total value = 0.15 }
+	}
+	else = {
+		multiply_variable = { which = pop_total value = 0.85 }
+	}
+	pop_calcular_alvo_urbano = yes
+	set_variable = { which = pop_taxa_urbana which = pop_t1 }
+	set_variable = { which = pop_crescimento value = 0 }
+	set_variable = { which = pop_razao which = pop_total }
+	divide_variable = { which = pop_razao which = pop_capacidade }
+	pop_atualizar_classes = yes
+	pop_calcular_atratividade = yes
+	pop_atualizar_faixas = yes
+}
+
+
+# --------------------------------------------------------------------------
+#  ATUALIZAÇÃO PERIÓDICA (escopo: PROVÍNCIA)
+#  Requer pop_fator_tempo já copiado do dono.
+# --------------------------------------------------------------------------
+pop_atualizar_provincia = {
+	pop_calcular_capacidade = yes
+
+	# 1) Crescimento natural LOGÍSTICO:
+	#    crescimento = pop x taxa x (1 - pop/capacidade)
+	#    Perto da capacidade o crescimento tende a zero; acima dela, a
+	#    população encolhe sozinha.
+	set_variable = { which = pop_razao which = pop_total }
+	divide_variable = { which = pop_razao which = pop_capacidade }
+	set_variable = { which = pop_t1 which = pop_razao }
+	multiply_variable = { which = pop_t1 value = -1 }
+	change_variable = { which = pop_t1 value = 1 }
+	pop_calcular_taxa_natural = yes
+	set_variable = { which = pop_crescimento which = pop_total }
+	multiply_variable = { which = pop_crescimento which = pop_t2 }
+	divide_variable = { which = pop_crescimento value = 1000 }
+	multiply_variable = { which = pop_crescimento which = pop_t1 }
+
+	# 2) Choques (guerra, cerco, saque, devastação). Somados FORA do termo
+	#    logístico: senão uma província superlotada e em guerra teria
+	#    "negativo x negativo" e cresceria.
+	pop_calcular_choques = yes
+	set_variable = { which = pop_t3 which = pop_total }
+	multiply_variable = { which = pop_t3 which = pop_t2 }
+	divide_variable = { which = pop_t3 value = 1000 }
+	change_variable = { which = pop_crescimento which = pop_t3 }
+
+	multiply_variable = { which = pop_crescimento which = pop_fator_tempo }
+	change_variable = { which = pop_total which = pop_crescimento }
+	if = {
+		limit = { NOT = { check_variable = { which = pop_total value = 1 } } }
+		set_variable = { which = pop_total value = 1 }
+	}
+
+	# 3) Urbanização: a taxa urbana anda 10% da distância até o alvo.
+	pop_calcular_alvo_urbano = yes
+	subtract_variable = { which = pop_t1 which = pop_taxa_urbana }
+	multiply_variable = { which = pop_t1 value = 0.1 }
+	multiply_variable = { which = pop_t1 which = pop_fator_tempo }
+	change_variable = { which = pop_taxa_urbana which = pop_t1 }
+
+	# 4) Migração e efeitos econômicos.
+	set_variable = { which = pop_razao which = pop_total }
+	divide_variable = { which = pop_razao which = pop_capacidade }
+	pop_calcular_atratividade = yes
+	pop_migracao = yes
+	pop_atualizar_classes = yes
+	pop_atualizar_faixas = yes
+	pop_pressao_desenvolvimento = yes
+}
+
+# Escopo: PROVÍNCIA. Capacidade de sustento (em milhares) -> pop_capacidade
+pop_calcular_capacidade = {
+	export_to_variable = { which = pop_capacidade value = trigger_value:development }
+	multiply_variable = { which = pop_capacidade value = 15 }
+	if = {
+		limit = { is_prosperous = yes }
+		multiply_variable = { which = pop_capacidade value = 1.15 }
+	}
+	if = {
+		limit = { has_building = farm_estate }
+		multiply_variable = { which = pop_capacidade value = 1.2 }
+	}
+	if = {
+		limit = { is_capital = yes }
+		multiply_variable = { which = pop_capacidade value = 1.1 }
+	}
+	if = {
+		limit = { has_port = yes }
+		multiply_variable = { which = pop_capacidade value = 1.05 }
+	}
+	if = {
+		limit = { devastation = 50 }
+		multiply_variable = { which = pop_capacidade value = 0.75 }
+	}
+	else_if = {
+		limit = { devastation = 20 }
+		multiply_variable = { which = pop_capacidade value = 0.9 }
+	}
+	if = {
+		limit = { NOT = { check_variable = { which = pop_capacidade value = 5 } } }
+		set_variable = { which = pop_capacidade value = 5 }
+	}
+}
+
+# Escopo: PROVÍNCIA. Taxa natural em "por mil ao ano" -> pop_t2
+# 15 por mil (1,5% ao ano) é a taxa "com terra sobrando"; o termo logístico
+# reduz isso perto da capacidade. Ajustado com ferramentas/simular_provincia.py
+# para que uma província recupere a maior parte das perdas de guerra em
+# uma geração (~30 anos).
+pop_calcular_taxa_natural = {
+	set_variable = { which = pop_t2 value = 15 }
+	if = {
+		limit = { is_prosperous = yes }
+		change_variable = { which = pop_t2 value = 5 }
+	}
+	if = {
+		limit = { has_owner_culture = no }
+		change_variable = { which = pop_t2 value = -2 }
+	}
+	if = {
+		limit = { has_owner_religion = no }
+		change_variable = { which = pop_t2 value = -2 }
+	}
+	if = {
+		limit = { unrest = 5 }
+		change_variable = { which = pop_t2 value = -4 }
+	}
+}
+
+# Escopo: PROVÍNCIA. Choques em "por mil ao ano" (zero ou negativo) -> pop_t2
+pop_calcular_choques = {
+	set_variable = { which = pop_t2 value = 0 }
+	if = {
+		limit = { has_siege = yes }
+		change_variable = { which = pop_t2 value = -15 }
+	}
+	if = {
+		limit = { NOT = { controlled_by = owner } }
+		change_variable = { which = pop_t2 value = -5 }
+	}
+	if = {
+		limit = { is_looted = yes }
+		change_variable = { which = pop_t2 value = -5 }
+	}
+	if = {
+		limit = { devastation = 50 }
+		change_variable = { which = pop_t2 value = -10 }
+	}
+	else_if = {
+		limit = { devastation = 20 }
+		change_variable = { which = pop_t2 value = -4 }
+	}
+}
+
+# Escopo: PROVÍNCIA. Parcela urbana "ideal" (0 a 0.6) -> pop_t1
+# Cresce com a fatia de produção no desenvolvimento, capital, centro de
+# comércio e prédios urbanos. É o equivalente simplificado das
+# "profissões" dos pops do Victoria.
+pop_calcular_alvo_urbano = {
+	export_to_variable = { which = pop_t1 value = trigger_value:base_production }
+	export_to_variable = { which = pop_t2 value = trigger_value:development }
+	if = {
+		limit = { check_variable = { which = pop_t2 value = 1 } }
+		divide_variable = { which = pop_t1 which = pop_t2 }
+	}
+	multiply_variable = { which = pop_t1 value = 0.25 }
+	change_variable = { which = pop_t1 value = 0.04 }
+	if = {
+		limit = { is_capital = yes }
+		change_variable = { which = pop_t1 value = 0.08 }
+	}
+	if = {
+		limit = { province_has_center_of_trade_of_level = 3 }
+		change_variable = { which = pop_t1 value = 0.1 }
+	}
+	else_if = {
+		limit = { province_has_center_of_trade_of_level = 2 }
+		change_variable = { which = pop_t1 value = 0.06 }
+	}
+	else_if = {
+		limit = { province_has_center_of_trade_of_level = 1 }
+		change_variable = { which = pop_t1 value = 0.03 }
+	}
+	if = {
+		limit = { has_building = stock_exchange }
+		change_variable = { which = pop_t1 value = 0.06 }
+	}
+	else_if = {
+		limit = { has_building = trade_depot }
+		change_variable = { which = pop_t1 value = 0.04 }
+	}
+	else_if = {
+		limit = { has_building = marketplace }
+		change_variable = { which = pop_t1 value = 0.02 }
+	}
+	if = {
+		limit = { has_building = counting_house }
+		change_variable = { which = pop_t1 value = 0.04 }
+	}
+	else_if = {
+		limit = { has_building = workshop }
+		change_variable = { which = pop_t1 value = 0.02 }
+	}
+	if = {
+		limit = {
+			OR = {
+				has_building = textile
+				has_building = weapons
+				has_building = wharf
+				has_building = mills
+				has_building = furnace
+			}
+		}
+		change_variable = { which = pop_t1 value = 0.04 }
+	}
+	if = {
+		limit = { check_variable = { which = pop_t1 value = 0.6 } }
+		set_variable = { which = pop_t1 value = 0.6 }
+	}
+}
+
+# Escopo: PROVÍNCIA. Divide pop_total entre urbanos e camponeses.
+pop_atualizar_classes = {
+	set_variable = { which = pop_urbanos which = pop_total }
+	multiply_variable = { which = pop_urbanos which = pop_taxa_urbana }
+	set_variable = { which = pop_camponeses which = pop_total }
+	subtract_variable = { which = pop_camponeses which = pop_urbanos }
+}
+
+# Escopo: PROVÍNCIA. Quanto a província atrai migrantes -> pop_atratividade
+# Requer pop_razao atualizado.
+pop_calcular_atratividade = {
+	# Terra livre atrai: (1 - razão) x 4  -> vazia = +4, lotada = 0 ou menos
+	set_variable = { which = pop_atratividade which = pop_razao }
+	multiply_variable = { which = pop_atratividade value = -4 }
+	change_variable = { which = pop_atratividade value = 4 }
+	if = {
+		limit = { is_prosperous = yes }
+		change_variable = { which = pop_atratividade value = 2 }
+	}
+	if = {
+		limit = { is_capital = yes }
+		change_variable = { which = pop_atratividade value = 2 }
+	}
+	if = {
+		limit = { province_has_center_of_trade_of_level = 1 }
+		change_variable = { which = pop_atratividade value = 1 }
+	}
+	if = {
+		limit = { has_owner_culture = no }
+		change_variable = { which = pop_atratividade value = -1 }
+	}
+	if = {
+		limit = { unrest = 5 }
+		change_variable = { which = pop_atratividade value = -2 }
+	}
+	if = {
+		limit = { devastation = 20 }
+		change_variable = { which = pop_atratividade value = -3 }
+	}
+	if = {
+		limit = { has_siege = yes }
+		change_variable = { which = pop_atratividade value = -4 }
+	}
+}
+
+
+# --------------------------------------------------------------------------
+#  MIGRAÇÃO (escopo: PROVÍNCIA de ORIGEM)
+# --------------------------------------------------------------------------
+# Só províncias "pressionadas" (lotadas ou pouco atraentes) procuram
+# destino, e olham apenas os VIZINHOS (~6 províncias), nunca o mapa todo.
+# O destino precisa ter atratividade pelo menos 1 ponto maior e espaço.
+pop_migracao = {
+	if = {
+		limit = {
+			NOT = { has_global_flag = pop_migracao_desligada }
+			check_variable = { which = pop_total value = 5 }
+			OR = {
+				check_variable = { which = pop_razao value = 0.95 }
+				NOT = { check_variable = { which = pop_atratividade value = 0 } }
+			}
+			NOT = {
+				AND = {
+					has_global_flag = pop_modo_leve
+					owner = { ai = yes }
+				}
+			}
+		}
+		# Quantos saem: 2% (4% se a província está em crise)
+		set_variable = { which = pop_migrantes which = pop_total }
+		if = {
+			limit = { NOT = { check_variable = { which = pop_atratividade value = -2 } } }
+			multiply_variable = { which = pop_migrantes value = 0.04 }
+		}
+		else = {
+			multiply_variable = { which = pop_migrantes value = 0.02 }
+		}
+		multiply_variable = { which = pop_migrantes which = pop_fator_tempo }
+
+		owner = { save_event_target_as = pop_dono_origem }
+		# Truque: somamos 1 à atratividade da origem só durante a busca,
+		# assim "destino >= origem" vira "destino >= origem + 1".
+		change_variable = { which = pop_atratividade value = 1 }
+		random_neighbor_province = {
+			limit = {
+				has_province_flag = pop_iniciada
+				is_city = yes
+				NOT = { check_variable = { which = pop_razao value = 1 } }
+				check_variable = { which = pop_atratividade which = PREV }
+				OR = {
+					owned_by = event_target:pop_dono_origem
+					has_global_flag = pop_modo_alto
+				}
+			}
+			set_variable = { which = pop_migrantes which = PREV }
+			change_variable = { which = pop_total which = pop_migrantes }
+			pop_atualizar_classes = yes
+			PREV = { set_province_flag = pop_emigrou }
+		}
+		change_variable = { which = pop_atratividade value = -1 }
+
+		if = {
+			limit = { has_province_flag = pop_emigrou }
+			clr_province_flag = pop_emigrou
+			subtract_variable = { which = pop_total which = pop_migrantes }
+			owner = {
+				set_variable = { which = pop_migrantes which = PREV }
+				change_variable = { which = pop_migrantes_ciclo which = pop_migrantes }
+			}
+		}
+
+		# Emigração colonial: excedente de gente acelera as colônias do dono.
+		if = {
+			limit = {
+				check_variable = { which = pop_razao value = 1 }
+				check_variable = { which = pop_total value = 10 }
+				owner = { num_of_colonies = 1 }
+			}
+			random = {
+				chance = 50
+				owner = {
+					random_owned_province = {
+						limit = { is_colony = yes }
+						add_colonysize = 40
+					}
+				}
+				subtract_variable = { which = pop_total value = 1 }
+			}
+		}
+	}
+}
+
+
+# --------------------------------------------------------------------------
+#  EFEITOS ECONÔMICOS (escopo: PROVÍNCIA)
+# --------------------------------------------------------------------------
+# Calcula a faixa nova e SÓ troca o modificador se a faixa mudou.
+# Adicionar/remover modificador obriga o jogo a recalcular a província e
+# o país inteiro, então evitar trocas inúteis é a maior economia aqui.
+# As faixas começam em 1 porque variável inexistente vale 0: assim a
+# primeira comparação sempre detecta "mudou" e aplica o modificador.
+pop_atualizar_faixas = {
+	# --- Faixa rural (camponeses): imposto e soldados ---
+	if = {
+		limit = { check_variable = { which = pop_camponeses value = 320 } }
+		set_variable = { which = pop_t1 value = 6 }
+	}
+	else_if = {
+		limit = { check_variable = { which = pop_camponeses value = 200 } }
+		set_variable = { which = pop_t1 value = 5 }
+	}
+	else_if = {
+		limit = { check_variable = { which = pop_camponeses value = 120 } }
+		set_variable = { which = pop_t1 value = 4 }
+	}
+	else_if = {
+		limit = { check_variable = { which = pop_camponeses value = 60 } }
+		set_variable = { which = pop_t1 value = 3 }
+	}
+	else_if = {
+		limit = { check_variable = { which = pop_camponeses value = 25 } }
+		set_variable = { which = pop_t1 value = 2 }
+	}
+	else = {
+		set_variable = { which = pop_t1 value = 1 }
+	}
+	if = {
+		limit = { NOT = { is_variable_equal = { which = pop_faixa_r which = pop_t1 } } }
+		set_variable = { which = pop_faixa_r which = pop_t1 }
+		remove_province_modifier = pop_rural_1
+		remove_province_modifier = pop_rural_3
+		remove_province_modifier = pop_rural_4
+		remove_province_modifier = pop_rural_5
+		remove_province_modifier = pop_rural_6
+		if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 1 } }
+			add_province_modifier = { name = pop_rural_1 duration = -1 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 3 } }
+			add_province_modifier = { name = pop_rural_3 duration = -1 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 4 } }
+			add_province_modifier = { name = pop_rural_4 duration = -1 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 5 } }
+			add_province_modifier = { name = pop_rural_5 duration = -1 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 6 } }
+			add_province_modifier = { name = pop_rural_6 duration = -1 }
+		}
+		# faixa 2 (25 a 60 mil) é neutra: nenhum modificador
+	}
+
+	# --- Faixa urbana (burgueses/artesãos): produção, comércio, ideias ---
+	if = {
+		limit = { check_variable = { which = pop_urbanos value = 250 } }
+		set_variable = { which = pop_t1 value = 6 }
+	}
+	else_if = {
+		limit = { check_variable = { which = pop_urbanos value = 100 } }
+		set_variable = { which = pop_t1 value = 5 }
+	}
+	else_if = {
+		limit = { check_variable = { which = pop_urbanos value = 40 } }
+		set_variable = { which = pop_t1 value = 4 }
+	}
+	else_if = {
+		limit = { check_variable = { which = pop_urbanos value = 15 } }
+		set_variable = { which = pop_t1 value = 3 }
+	}
+	else_if = {
+		limit = { check_variable = { which = pop_urbanos value = 5 } }
+		set_variable = { which = pop_t1 value = 2 }
+	}
+	else = {
+		set_variable = { which = pop_t1 value = 1 }
+	}
+	if = {
+		limit = { NOT = { is_variable_equal = { which = pop_faixa_u which = pop_t1 } } }
+		set_variable = { which = pop_faixa_u which = pop_t1 }
+		remove_province_modifier = pop_urbana_2
+		remove_province_modifier = pop_urbana_3
+		remove_province_modifier = pop_urbana_4
+		remove_province_modifier = pop_urbana_5
+		remove_province_modifier = pop_urbana_6
+		if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 2 } }
+			add_province_modifier = { name = pop_urbana_2 duration = -1 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 3 } }
+			add_province_modifier = { name = pop_urbana_3 duration = -1 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 4 } }
+			add_province_modifier = { name = pop_urbana_4 duration = -1 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 5 } }
+			add_province_modifier = { name = pop_urbana_5 duration = -1 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 6 } }
+			add_province_modifier = { name = pop_urbana_6 duration = -1 }
+		}
+		# faixa 1 (menos de 5 mil urbanos): nenhum modificador
+	}
+
+	# --- Pressão demográfica (pop / capacidade) ---
+	if = {
+		limit = { check_variable = { which = pop_razao value = 1.15 } }
+		set_variable = { which = pop_t1 value = 3 }
+	}
+	else_if = {
+		limit = { check_variable = { which = pop_razao value = 0.5 } }
+		set_variable = { which = pop_t1 value = 2 }
+	}
+	else = {
+		set_variable = { which = pop_t1 value = 1 }
+	}
+	if = {
+		limit = { NOT = { is_variable_equal = { which = pop_faixa_p which = pop_t1 } } }
+		set_variable = { which = pop_faixa_p which = pop_t1 }
+		remove_province_modifier = pop_subpovoada
+		remove_province_modifier = pop_superpovoada
+		if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 1 } }
+			add_province_modifier = { name = pop_subpovoada duration = -1 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 3 } }
+			add_province_modifier = { name = pop_superpovoada duration = -1 }
+		}
+	}
+}
+
+# Escopo: PROVÍNCIA. Superpopulação persistente vira desenvolvimento:
+# gente demais força a abertura de oficinas (produção) ou de novas
+# lavouras (imposto). Isso aumenta a capacidade e fecha o ciclo.
+pop_pressao_desenvolvimento = {
+	if = {
+		limit = {
+			NOT = { has_global_flag = pop_sem_desenvolvimento }
+			check_variable = { which = pop_razao value = 1.1 }
+			NOT = { devastation = 10 }
+		}
+		random = {
+			chance = 10
+			if = {
+				limit = { check_variable = { which = pop_taxa_urbana value = 0.25 } }
+				add_base_production = 1
+			}
+			else = {
+				add_base_tax = 1
+			}
+		}
+	}
+}
+
+
+# --------------------------------------------------------------------------
+#  NÍVEL NACIONAL (escopo: PAÍS)
+# --------------------------------------------------------------------------
+# Soma as províncias. Usa variáveis-rascunho com o MESMO nome no país
+# (pop_total, pop_urbanos) porque "which = PREV" copia a variável de mesmo
+# nome de outro escopo.
+pop_somar_totais_nacionais = {
+	set_variable = { which = pop_nac_total value = 0 }
+	set_variable = { which = pop_nac_urbanos value = 0 }
+	every_owned_province = {
+		limit = { has_province_flag = pop_iniciada }
+		owner = {
+			set_variable = { which = pop_total which = PREV }
+			set_variable = { which = pop_urbanos which = PREV }
+			change_variable = { which = pop_nac_total which = pop_total }
+			change_variable = { which = pop_nac_urbanos which = pop_urbanos }
+		}
+	}
+	set_variable = { which = pop_nac_camponeses which = pop_nac_total }
+	subtract_variable = { which = pop_nac_camponeses which = pop_nac_urbanos }
+	set_variable = { which = pop_nac_taxa_urbana value = 0 }
+	if = {
+		limit = { check_variable = { which = pop_nac_total value = 1 } }
+		set_variable = { which = pop_nac_taxa_urbana which = pop_nac_urbanos }
+		divide_variable = { which = pop_nac_taxa_urbana which = pop_nac_total }
+	}
+	set_variable = { which = pop_nac_pct_urbana which = pop_nac_taxa_urbana }
+	multiply_variable = { which = pop_nac_pct_urbana value = 100 }
+}
+
+# Escopo: PAÍS. Maior cidade (província com mais urbanos). Só roda quando
+# o jogador abre o painel, nunca no tick.
+pop_calcular_maior_cidade = {
+	set_variable = { which = pop_urbanos value = 0 }
+	every_owned_province = {
+		limit = { has_province_flag = pop_iniciada }
+		# A comparação fica DENTRO do laço (e não no limit) para usar o
+		# máximo já atualizado a cada província.
+		if = {
+			limit = { check_variable = { which = pop_urbanos which = PREV } }
+			owner = { set_variable = { which = pop_urbanos which = PREV } }
+			save_event_target_as = pop_maior_cidade
+		}
+	}
+	set_variable = { which = pop_nac_maior_cidade which = pop_urbanos }
+}
+
+# Escopo: PAÍS. Fim de um ciclo completo (4 lotes): estatísticas e
+# modificador nacional por grau de urbanização.
+pop_fechar_ciclo_nacional = {
+	pop_somar_totais_nacionais = yes
+	if = {
+		limit = { has_country_flag = pop_tem_ciclo_anterior }
+		set_variable = { which = pop_nac_variacao which = pop_nac_total }
+		subtract_variable = { which = pop_nac_variacao which = pop_nac_anterior }
+	}
+	else = {
+		set_country_flag = pop_tem_ciclo_anterior
+		set_variable = { which = pop_nac_variacao value = 0 }
+	}
+	set_variable = { which = pop_nac_anterior which = pop_nac_total }
+	set_variable = { which = pop_migrantes_ultimo which = pop_migrantes_ciclo }
+	set_variable = { which = pop_migrantes_ciclo value = 0 }
+
+	if = {
+		limit = { check_variable = { which = pop_nac_taxa_urbana value = 0.3 } }
+		set_variable = { which = pop_t1 value = 4 }
+	}
+	else_if = {
+		limit = { check_variable = { which = pop_nac_taxa_urbana value = 0.2 } }
+		set_variable = { which = pop_t1 value = 3 }
+	}
+	else_if = {
+		limit = { check_variable = { which = pop_nac_taxa_urbana value = 0.1 } }
+		set_variable = { which = pop_t1 value = 2 }
+	}
+	else = {
+		set_variable = { which = pop_t1 value = 1 }
+	}
+	if = {
+		limit = { NOT = { is_variable_equal = { which = pop_faixa_nac which = pop_t1 } } }
+		set_variable = { which = pop_faixa_nac which = pop_t1 }
+		remove_country_modifier = pop_sociedade_agraria
+		remove_country_modifier = pop_sociedade_mercantil
+		remove_country_modifier = pop_sociedade_urbana
+		if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 1 } }
+			add_country_modifier = { name = pop_sociedade_agraria duration = -1 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 3 } }
+			add_country_modifier = { name = pop_sociedade_mercantil duration = -1 }
+		}
+		else_if = {
+			limit = { is_variable_equal = { which = pop_t1 value = 4 } }
+			add_country_modifier = { name = pop_sociedade_urbana duration = -1 }
+		}
+	}
+	if = {
+		limit = { has_global_flag = pop_debug }
+		log = "POP | [Root.GetName] | ciclo nacional: [Root.pop_nac_total.GetValue] mil hab, [Root.pop_nac_pct_urbana.GetValue]% urbano"
+	}
+}
+
+
+# --------------------------------------------------------------------------
+#  GANCHOS DE EVENTOS DO JOGO (só rodam quando a coisa acontece)
+# --------------------------------------------------------------------------
+# Escopo: PROVÍNCIA sitiada e tomada.
+pop_efeito_cerco = {
+	if = {
+		limit = { has_province_flag = pop_iniciada }
+		multiply_variable = { which = pop_total value = 0.97 }
+		pop_atualizar_classes = yes
+	}
+}
+
+# Escopo: PROVÍNCIA colonial. Marca para nascer pequena quando virar cidade.
+pop_marcar_colonia = {
+	if = {
+		limit = { NOT = { has_province_flag = pop_era_colonia } }
+		set_province_flag = pop_era_colonia
+	}
+}
+
+# Escopo: PAÍS. Início de partida nova: inicializa tudo de uma vez durante
+# o carregamento (custo único) para que o mapa já tenha dados no dia 1.
+pop_iniciar_partida = {
+	pop_iniciar_pais = yes
+	every_owned_province = {
+		limit = { is_city = yes }
+		pop_iniciar_provincia = yes
+	}
+	pop_fechar_ciclo_nacional = yes
+}
+
+
+# --------------------------------------------------------------------------
+#  MENU (escopo: PAÍS)
+# --------------------------------------------------------------------------
+pop_desligar_camadas = {
+	clr_country_flag = pop_mapa_superpovoadas
+	clr_country_flag = pop_mapa_subpovoadas
+	clr_country_flag = pop_mapa_cidades
+	clr_country_flag = pop_mapa_destinos
+	clr_country_flag = pop_mapa_declinio
+}
+
+# Aplica um novo modo de desempenho a todos os países imediatamente.
+pop_recalcular_intervalos = {
+	every_country = {
+		limit = { has_country_flag = pop_pais_iniciado }
+		pop_calcular_intervalo = yes
+	}
+}

@@ -1,0 +1,136 @@
+# ==========================================================================
+#  População Híbrida - decisões
+#
+#  O EU4 não permite criar modos de mapa novos por script. A forma
+#  suportada de pintar províncias é o bloco provinces_to_highlight de uma
+#  decisão: ao clicar na decisão na aba Decisões, o mapa destaca as
+#  províncias que passam no teste. Cada "camada" abaixo é uma decisão
+#  dessas, ligada pelo Painel Demográfico.
+#
+#  Desempenho: "ai = no" vem PRIMEIRO no potential. Assim os ~400 países
+#  da IA descartam estas decisões na primeira checagem, e o teste de
+#  províncias só roda enquanto o jogador está olhando a camada.
+# ==========================================================================
+
+country_decisions = {
+
+	pop_abrir_painel = {
+		potential = {
+			ai = no
+		}
+		allow = {
+			always = yes
+		}
+		effect = {
+			country_event = { id = pop_menu.1 }
+		}
+		ai_will_do = {
+			factor = 0
+		}
+	}
+
+	pop_camada_superpovoadas = {
+		potential = {
+			ai = no
+			has_country_flag = pop_mapa_superpovoadas
+		}
+		provinces_to_highlight = {
+			pop_visivel_no_mapa = yes
+			check_variable = { which = pop_razao value = 1 }
+		}
+		allow = {
+			always = yes
+		}
+		effect = {
+			pop_desligar_camadas = yes
+			country_event = { id = pop_menu.2 }
+		}
+		ai_will_do = {
+			factor = 0
+		}
+	}
+
+	pop_camada_subpovoadas = {
+		potential = {
+			ai = no
+			has_country_flag = pop_mapa_subpovoadas
+		}
+		provinces_to_highlight = {
+			pop_visivel_no_mapa = yes
+			NOT = { check_variable = { which = pop_razao value = 0.6 } }
+		}
+		allow = {
+			always = yes
+		}
+		effect = {
+			pop_desligar_camadas = yes
+			country_event = { id = pop_menu.2 }
+		}
+		ai_will_do = {
+			factor = 0
+		}
+	}
+
+	pop_camada_cidades = {
+		potential = {
+			ai = no
+			has_country_flag = pop_mapa_cidades
+		}
+		provinces_to_highlight = {
+			pop_visivel_no_mapa = yes
+			check_variable = { which = pop_urbanos value = 40 }
+		}
+		allow = {
+			always = yes
+		}
+		effect = {
+			pop_desligar_camadas = yes
+			country_event = { id = pop_menu.2 }
+		}
+		ai_will_do = {
+			factor = 0
+		}
+	}
+
+	pop_camada_destinos = {
+		potential = {
+			ai = no
+			has_country_flag = pop_mapa_destinos
+		}
+		provinces_to_highlight = {
+			pop_visivel_no_mapa = yes
+			check_variable = { which = pop_atratividade value = 4 }
+		}
+		allow = {
+			always = yes
+		}
+		effect = {
+			pop_desligar_camadas = yes
+			country_event = { id = pop_menu.2 }
+		}
+		ai_will_do = {
+			factor = 0
+		}
+	}
+
+	pop_camada_declinio = {
+		potential = {
+			ai = no
+			has_country_flag = pop_mapa_declinio
+		}
+		provinces_to_highlight = {
+			pop_visivel_no_mapa = yes
+			NOT = { check_variable = { which = pop_crescimento value = 0 } }
+		}
+		allow = {
+			always = yes
+		}
+		effect = {
+			pop_desligar_camadas = yes
+			country_event = { id = pop_menu.2 }
+		}
+		ai_will_do = {
+			factor = 0
+		}
+	}
+}

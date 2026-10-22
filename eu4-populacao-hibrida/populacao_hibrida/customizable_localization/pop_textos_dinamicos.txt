@@ -1,0 +1,119 @@
+# ==========================================================================
+#  População Híbrida - textos dinâmicos
+#  Uso na localização: [Root.GetPopModo], [Root.GetPopMaiorCidade] etc.
+#  Cada texto tem gatilhos mutuamente exclusivos.
+# ==========================================================================
+
+defined_text = {
+	name = GetPopModo
+	text = {
+		localisation_key = pop_txt_modo_alto
+		trigger = { has_global_flag = pop_modo_alto }
+	}
+	text = {
+		localisation_key = pop_txt_modo_leve
+		trigger = { has_global_flag = pop_modo_leve }
+	}
+	text = {
+		localisation_key = pop_txt_modo_equilibrado
+		trigger = {
+			NOT = { has_global_flag = pop_modo_alto }
+			NOT = { has_global_flag = pop_modo_leve }
+		}
+	}
+}
+
+defined_text = {
+	name = GetPopIA
+	text = {
+		localisation_key = pop_txt_ia_detalhada
+		trigger = { has_global_flag = pop_ia_detalhada }
+	}
+	text = {
+		localisation_key = pop_txt_ia_simplificada
+		trigger = { NOT = { has_global_flag = pop_ia_detalhada } }
+	}
+}
+
+defined_text = {
+	name = GetPopMigracao
+	text = {
+		localisation_key = pop_txt_desligada
+		trigger = { has_global_flag = pop_migracao_desligada }
+	}
+	text = {
+		localisation_key = pop_txt_ligada
+		trigger = { NOT = { has_global_flag = pop_migracao_desligada } }
+	}
+}
+
+defined_text = {
+	name = GetPopDesenvolvimento
+	text = {
+		localisation_key = pop_txt_desligado
+		trigger = { has_global_flag = pop_sem_desenvolvimento }
+	}
+	text = {
+		localisation_key = pop_txt_ligado
+		trigger = { NOT = { has_global_flag = pop_sem_desenvolvimento } }
+	}
+}
+
+defined_text = {
+	name = GetPopEscopoMapa
+	text = {
+		localisation_key = pop_txt_escopo_mundo
+		trigger = { has_global_flag = pop_mapa_mundial }
+	}
+	text = {
+		localisation_key = pop_txt_escopo_pais
+		trigger = { NOT = { has_global_flag = pop_mapa_mundial } }
+	}
+}
+
+defined_text = {
+	name = GetPopSistema
+	text = {
+		localisation_key = pop_txt_pausado
+		trigger = { has_global_flag = pop_sistema_pausado }
+	}
+	text = {
+		localisation_key = pop_txt_rodando
+		trigger = { NOT = { has_global_flag = pop_sistema_pausado } }
+	}
+}
+
+defined_text = {
+	name = GetPopDebug
+	text = {
+		localisation_key = pop_txt_ligado
+		trigger = { has_global_flag = pop_debug }
+	}
+	text = {
+		localisation_key = pop_txt_desligado
+		trigger = { NOT = { has_global_flag = pop_debug } }
+	}
+}
+
+# Escopo: país. Depende do alvo salvo em pop_calcular_maior_cidade.
+defined_text = {
+	name = GetPopMaiorCidade
+	text = {
+		localisation_key = pop_txt_maior_cidade
+		trigger = {
+			check_variable = { which = pop_nac_maior_cidade value = 0.001 }
+			has_saved_event_target = pop_maior_cidade
+		}
+	}
+	text = {
+		localisation_key = pop_txt_sem_dados
+		trigger = {
+			NOT = {
+				AND = {
+					check_variable = { which = pop_nac_maior_cidade value = 0.001 }
+					has_saved_event_target = pop_maior_cidade
+				}
+			}
+		}
+	}
+}

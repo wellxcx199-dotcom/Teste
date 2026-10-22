@@ -1,0 +1,12 @@
+			### >>> Populacao Hibrida: inicio (inserido por instalar_painel_provincia.py)
+			instantTextBoxType = {
+				name = "pop_painel_provincia"
+				position = { x = %X% y = %Y% }
+				font = "vic_18"
+				borderSize = { x = 2 y = 2 }
+				maxWidth = 260
+				maxHeight = 20
+				format = left
+				scripted = yes
+			}
+			### <<< Populacao Hibrida: fim

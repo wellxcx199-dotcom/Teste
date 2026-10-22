@@ -1,0 +1,235 @@
+# ==========================================================================
+#  População Híbrida - Painel Demográfico (menus por eventos)
+#
+#  Menus feitos com eventos funcionam sem sobrescrever nenhum arquivo de
+#  interface do jogo base, então nunca quebram com patches. Cada opção
+#  chama o próximo "menu" com country_event.
+#  Todos são is_triggered_only: o jogo nunca os testa sozinho.
+# ==========================================================================
+
+namespace = pop_menu
+
+# ---------------------------------------------------------------- Principal
+country_event = {
+	id = pop_menu.1
+	title = pop_menu.1.t
+	desc = pop_menu.1.d
+	picture = CITY_VIEW_eventPicture
+	is_triggered_only = yes
+
+	immediate = {
+		hidden_effect = {
+			pop_somar_totais_nacionais = yes
+			pop_calcular_maior_cidade = yes
+		}
+	}
+
+	option = {	# Camadas de mapa
+		name = pop_menu.1.mapas
+		country_event = { id = pop_menu.2 }
+	}
+	option = {	# Desempenho
+		name = pop_menu.1.desempenho
+		country_event = { id = pop_menu.3 }
+	}
+	option = {	# Regras
+		name = pop_menu.1.regras
+		country_event = { id = pop_menu.4 }
+	}
+	option = {	# Ajuda
+		name = pop_menu.1.ajuda
+		country_event = { id = pop_menu.5 }
+	}
+	option = {	# Fechar
+		name = pop_menu.1.fechar
+	}
+}
+
+# ---------------------------------------------------------- Camadas de mapa
+country_event = {
+	id = pop_menu.2
+	title = pop_menu.2.t
+	desc = pop_menu.2.d
+	picture = CITY_DEVELOPMENT_eventPicture
+	is_triggered_only = yes
+
+	option = {
+		name = pop_menu.2.super
+		pop_desligar_camadas = yes
+		set_country_flag = pop_mapa_superpovoadas
+		custom_tooltip = pop_menu_camada_tt
+	}
+	option = {
+		name = pop_menu.2.sub
+		pop_desligar_camadas = yes
+		set_country_flag = pop_mapa_subpovoadas
+		custom_tooltip = pop_menu_camada_tt
+	}
+	option = {
+		name = pop_menu.2.cidades
+		pop_desligar_camadas = yes
+		set_country_flag = pop_mapa_cidades
+		custom_tooltip = pop_menu_camada_tt
+	}
+	option = {
+		name = pop_menu.2.destinos
+		pop_desligar_camadas = yes
+		set_country_flag = pop_mapa_destinos
+		custom_tooltip = pop_menu_camada_tt
+	}
+	option = {
+		name = pop_menu.2.declinio
+		pop_desligar_camadas = yes
+		set_country_flag = pop_mapa_declinio
+		custom_tooltip = pop_menu_camada_tt
+	}
+	option = {	# Voltar
+		name = pop_menu.voltar
+		country_event = { id = pop_menu.1 }
+	}
+}
+
+# --------------------------------------------------------------- Desempenho
+country_event = {
+	id = pop_menu.3
+	title = pop_menu.3.t
+	desc = pop_menu.3.d
+	picture = ECONOMY_eventPicture
+	is_triggered_only = yes
+
+	option = {	# Alto detalhe
+		name = pop_menu.3.alto
+		trigger = { NOT = { has_global_flag = pop_modo_alto } }
+		clr_global_flag = pop_modo_leve
+		set_global_flag = pop_modo_alto
+		hidden_effect = { pop_recalcular_intervalos = yes }
+		country_event = { id = pop_menu.3 }
+	}
+	option = {	# Equilibrado
+		name = pop_menu.3.equilibrado
+		trigger = {
+			OR = {
+				has_global_flag = pop_modo_alto
+				has_global_flag = pop_modo_leve
+			}
+		}
+		clr_global_flag = pop_modo_alto
+		clr_global_flag = pop_modo_leve
+		hidden_effect = { pop_recalcular_intervalos = yes }
+		country_event = { id = pop_menu.3 }
+	}
+	option = {	# Leve
+		name = pop_menu.3.leve
+		trigger = { NOT = { has_global_flag = pop_modo_leve } }
+		clr_global_flag = pop_modo_alto
+		set_global_flag = pop_modo_leve
+		hidden_effect = { pop_recalcular_intervalos = yes }
+		country_event = { id = pop_menu.3 }
+	}
+	option = {	# IA detalhada: ligar
+		name = pop_menu.3.ia_detalhada
+		trigger = { NOT = { has_global_flag = pop_ia_detalhada } }
+		set_global_flag = pop_ia_detalhada
+		hidden_effect = { pop_recalcular_intervalos = yes }
+		country_event = { id = pop_menu.3 }
+	}
+	option = {	# IA simplificada: voltar ao padrão
+		name = pop_menu.3.ia_simplificada
+		trigger = { has_global_flag = pop_ia_detalhada }
+		clr_global_flag = pop_ia_detalhada
+		hidden_effect = { pop_recalcular_intervalos = yes }
+		country_event = { id = pop_menu.3 }
+	}
+	option = {
+		name = pop_menu.voltar
+		country_event = { id = pop_menu.1 }
+	}
+}
+
+# ------------------------------------------------------------------- Regras
+country_event = {
+	id = pop_menu.4
+	title = pop_menu.4.t
+	desc = pop_menu.4.d
+	picture = CITY_VIEW_eventPicture
+	is_triggered_only = yes
+
+	option = {
+		name = pop_menu.4.migracao_desligar
+		trigger = { NOT = { has_global_flag = pop_migracao_desligada } }
+		set_global_flag = pop_migracao_desligada
+		country_event = { id = pop_menu.4 }
+	}
+	option = {
+		name = pop_menu.4.migracao_ligar
+		trigger = { has_global_flag = pop_migracao_desligada }
+		clr_global_flag = pop_migracao_desligada
+		country_event = { id = pop_menu.4 }
+	}
+	option = {
+		name = pop_menu.4.desenv_desligar
+		trigger = { NOT = { has_global_flag = pop_sem_desenvolvimento } }
+		set_global_flag = pop_sem_desenvolvimento
+		country_event = { id = pop_menu.4 }
+	}
+	option = {
+		name = pop_menu.4.desenv_ligar
+		trigger = { has_global_flag = pop_sem_desenvolvimento }
+		clr_global_flag = pop_sem_desenvolvimento
+		country_event = { id = pop_menu.4 }
+	}
+	option = {
+		name = pop_menu.4.mundo_ligar
+		trigger = { NOT = { has_global_flag = pop_mapa_mundial } }
+		set_global_flag = pop_mapa_mundial
+		country_event = { id = pop_menu.4 }
+	}
+	option = {
+		name = pop_menu.4.mundo_desligar
+		trigger = { has_global_flag = pop_mapa_mundial }
+		clr_global_flag = pop_mapa_mundial
+		country_event = { id = pop_menu.4 }
+	}
+	option = {
+		name = pop_menu.4.pausar
+		trigger = { NOT = { has_global_flag = pop_sistema_pausado } }
+		set_global_flag = pop_sistema_pausado
+		country_event = { id = pop_menu.4 }
+	}
+	option = {
+		name = pop_menu.4.retomar
+		trigger = { has_global_flag = pop_sistema_pausado }
+		clr_global_flag = pop_sistema_pausado
+		country_event = { id = pop_menu.4 }
+	}
+	option = {
+		name = pop_menu.4.debug_ligar
+		trigger = { NOT = { has_global_flag = pop_debug } }
+		set_global_flag = pop_debug
+		country_event = { id = pop_menu.4 }
+	}
+	option = {
+		name = pop_menu.4.debug_desligar
+		trigger = { has_global_flag = pop_debug }
+		clr_global_flag = pop_debug
+		country_event = { id = pop_menu.4 }
+	}
+	option = {
+		name = pop_menu.voltar
+		country_event = { id = pop_menu.1 }
+	}
+}
+
+# -------------------------------------------------------------------- Ajuda
+country_event = {
+	id = pop_menu.5
+	title = pop_menu.5.t
+	desc = pop_menu.5.d
+	picture = CITY_DEVELOPMENT_eventPicture
+	is_triggered_only = yes
+
+	option = {
+		name = pop_menu.voltar
+		country_event = { id = pop_menu.1 }
+	}
+}
