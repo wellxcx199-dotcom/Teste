@@ -27,7 +27,12 @@
 # Custo mensal por país: uma soma e uma comparação. O trabalho pesado só
 # acontece quando o contador alcança o intervalo, e cada vez processa
 # apenas 1/4 das províncias do país.
+# O trabalho pesado NÃO roda aqui dentro: ele vai para o evento oculto
+# pop_motor.1. Rodar lógica pesada direto dentro de um on_action é uma
+# causa conhecida de travamentos no EU4 (o Anbennar documenta vários
+# casos e move essa lógica para eventos pelo mesmo motivo).
 pop_pulso_mensal = {
+	pop_boas_vindas = yes
 	if = {
 		limit = { pop_pais_simulado = yes }
 		if = {
@@ -38,7 +43,7 @@ pop_pulso_mensal = {
 		if = {
 			limit = { check_variable = { which = pop_contador which = pop_intervalo } }
 			set_variable = { which = pop_contador value = 0 }
-			pop_executar_tick = yes
+			country_event = { id = pop_motor.1 }
 		}
 	}
 }
@@ -820,35 +825,13 @@ pop_marcar_colonia = {
 	}
 }
 
-# Escopo: PAÍS. Chamado pelo on_startup, que o EU4 dispara na partida nova
-# E TAMBÉM toda vez que um save é carregado. Por isso só inicializa o que
-# ainda não tem dados: carregar o save não pode zerar a população.
-# Na partida nova, isso deixa o mapa com dados já no dia 1.
-pop_iniciar_partida = {
-	if = {
-		limit = {
-			num_of_cities = 1
-			NOT = { has_country_flag = pop_pais_iniciado }
-		}
-		pop_iniciar_pais = yes
-		every_owned_province = {
-			limit = {
-				is_city = yes
-				NOT = { has_province_flag = pop_iniciada }
-			}
-			pop_iniciar_provincia = yes
-		}
-		pop_fechar_ciclo_nacional = yes
-	}
-}
-
-
 # --------------------------------------------------------------------------
 #  MENU (escopo: PAÍS)
 # --------------------------------------------------------------------------
 # Escopo: PAÍS. Aviso único para o jogador humano: confirma que o mod foi
-# carregado e mostra onde fica o painel. A flag impede que ele reapareça
-# a cada save carregado.
+# carregado e mostra onde fica o painel. Chamado pelo on_startup e, como
+# reserva, pelo pulso mensal. A flag impede que ele reapareça a cada save
+# carregado, e o atraso de 1 dia tira o evento de dentro do on_action.
 pop_boas_vindas = {
 	if = {
 		limit = {
@@ -856,7 +839,7 @@ pop_boas_vindas = {
 			NOT = { has_country_flag = pop_boas_vindas_vista }
 		}
 		set_country_flag = pop_boas_vindas_vista
-		country_event = { id = pop_menu.6 }
+		country_event = { id = pop_menu.6 days = 1 }
 	}
 }
 

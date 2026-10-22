@@ -34,19 +34,21 @@ Depois abra o launcher, vá em **Playsets**, adicione "Populacao Hibrida" a um p
 
 **O mod aparece, mas nada muda no jogo.** O mod não cria botão novo na tela principal nem modo de mapa novo. Tudo começa pela aba **Decisões** (o ícone de pergaminho no menu do país), na decisão **Painel Demográfico**. Se ela não estiver lá, confira se o playset com o mod é o que está selecionado quando você clica em Jogar. O painel na janela da província só aparece depois de rodar o instalador do painel, explicado abaixo.
 
-**A decisão aparece, mas o painel mostra zero.** Em partida nova, os dados são criados no carregamento. Num save antigo, criado sem o mod, os dados aparecem aos poucos nos primeiros três meses de jogo, conforme cada país faz o primeiro processamento.
+**A decisão aparece, mas o painel mostra zero.** Isso é normal no começo. Cada país prepara os dados das suas províncias no primeiro processamento, e os países se revezam ao longo dos primeiros três meses de jogo. Deixe o jogo correr até março de 1445 e abra o painel de novo.
+
+**O jogo trava (aparece um `exception.txt` em `logs`).** A versão 0.1.0 fazia a inicialização de todas as províncias do mundo dentro do `on_startup`, no início da partida. Trabalho pesado dentro de um `on_action` é uma causa conhecida de travamento no EU4, e a versão atual não faz mais isso. Se ainda travar, anote em que momento travou (na barra de carregamento, no menu principal, ao clicar em Jogar ou depois de alguns dias de jogo) e mande o `exception.txt`, o `error.log` e o relatório do `DIAGNOSTICO.bat`.
 
 **Aparece algum erro.** Abra `Documentos/Paradox Interactive/Europa Universalis IV/logs/error.log` logo depois de fechar o jogo e procure as linhas que contêm `pop_`. São essas linhas que dizem o que falhou neste mod.
 
 ### Painel na janela da província (opcional)
 
-Para mostrar a população dentro da janela da província, o EU4 exige que o elemento esteja dentro do arquivo `interface/provinceview.gui` do jogo base. Esse arquivo é da Paradox e muda a cada patch, então o mod não o distribui. Em vez disso, o script `ferramentas/instalar_painel_provincia.py` lê a sua cópia, insere uma linha de texto e grava o resultado na pasta do mod. Por exemplo, numa instalação Steam no Windows:
+Para mostrar a população dentro da janela da província, o EU4 exige que o elemento esteja dentro do arquivo `interface/provinceview.gui` do jogo base. Esse arquivo é da Paradox e muda a cada patch, então o mod não o distribui. Em vez disso, o script `ferramentas/instalar_painel_provincia.py` lê a sua cópia, insere uma linha de texto e grava o resultado no mod já instalado, junto com a definição desse texto (`common/custom_gui`). As duas partes só são instaladas juntas. Instale o mod primeiro e depois rode, por exemplo numa instalação Steam no Windows:
 
 ```
-python ferramentas/instalar_painel_provincia.py "C:/Program Files (x86)/Steam/steamapps/common/Europa Universalis IV" --saida "C:/Users/SEU_NOME/Documents/Paradox Interactive/Europa Universalis IV/mod/populacao_hibrida/interface"
+python ferramentas/instalar_painel_provincia.py "C:/Program Files (x86)/Steam/steamapps/common/Europa Universalis IV"
 ```
 
-No jogo, a janela da província passa a mostrar algo como "População: 64.5 mil | 9.6 urbanos", e passar o mouse em cima mostra camponeses, capacidade, ocupação, atratividade e a última variação. A posição padrão (`--x 30 --y 440`) é um palpite. Se o texto ficar em cima de outro elemento, rode de novo com outros valores, como `--x 40 --y 400`. Lembre que outro mod que também altere `provinceview.gui` vai conflitar com este, e que o script precisa ser rodado de novo depois de cada patch do EU4.
+No jogo, a janela da província passa a mostrar algo como "População: 64.5 mil | 9.6 urbanos", e passar o mouse em cima mostra camponeses, capacidade, ocupação, atratividade e a última variação. A posição padrão (`--x 30 --y 440`) é um palpite. Se o texto ficar em cima de outro elemento, rode de novo com outros valores, como `--x 40 --y 400`. Lembre que outro mod que também altere `provinceview.gui` vai conflitar com este, e que o script precisa ser rodado de novo depois de cada patch do EU4 e depois de cada vez que você usar o `INSTALAR.bat`, que reinstala o mod do zero. Se a sua pasta Documentos estiver no OneDrive, indique o mod instalado com `--mod "C:/Users/SEU_NOME/OneDrive/Documentos/Paradox Interactive/Europa Universalis IV/mod/populacao_hibrida"`.
 
 ## Como jogar
 
@@ -62,7 +64,7 @@ Todas as quantidades de população estão em milhares de habitantes.
 
 Cada província tem uma **capacidade de sustento** de 15 mil pessoas por ponto de desenvolvimento. Ela sobe 15% se a província for próspera, 20% com a manufatura de fazenda (`farm_estate`), 10% na capital e 5% com porto, e cai 10% com devastação acima de 20 ou 25% acima de 50.
 
-Por exemplo, uma província com desenvolvimento 10, sem nenhum bônus, tem capacidade de 150 mil. No início da partida ela começa com 85% disso, 127,5 mil habitantes. Uma colônia que acabou de virar cidade começa com só 15% da capacidade e vai crescendo.
+Por exemplo, uma província com desenvolvimento 10, sem nenhum bônus, tem capacidade de 150 mil. Quando o país a processa pela primeira vez, nos primeiros meses de jogo, ela começa com 85% disso, 127,5 mil habitantes. Uma colônia que acabou de virar cidade começa com só 15% da capacidade e vai crescendo.
 
 ### Crescimento logístico
 
@@ -123,7 +125,7 @@ Na primeira vez que abrir o jogo com o mod, veja o arquivo `error.log` em `Docum
 
 Três pontos dependem de detalhes do motor que não deu para confirmar sem o jogo. O primeiro é o formato dos números: o mod mostra os valores com `GetValue`, e o EU4 usa ponto como separador decimal, então "64.5 mil" quer dizer sessenta e quatro mil e quinhentos. O segundo é o nome da maior cidade no painel, que usa um alvo de evento (`[pop_maior_cidade.GetName]`) dentro de um texto dinâmico. O terceiro é a posição do painel na janela da província.
 
-Se aparecer no `error.log` um aviso sobre `pop_painel_provincia` e você não tiver rodado o instalador do painel, isso é esperado: a definição existe, mas o elemento de interface ainda não. Não atrapalha o resto do mod.
+Se o jogo travar e você quiser descobrir sozinho qual parte do mod é a culpada, apague na pasta do mod instalado o arquivo `common/on_actions/pop_on_actions.txt` e teste de novo. Sem ele a simulação não roda, mas os menus continuam. Se o travamento sumir, o problema está na simulação. Se continuar, está nos menus, nos textos ou em algo fora do mod. Depois, reinstale com o `INSTALAR.bat` para recuperar o arquivo.
 
 ## Próximos passos possíveis
 

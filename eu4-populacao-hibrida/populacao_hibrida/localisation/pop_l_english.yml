@@ -68,9 +68,14 @@
 
  # ---------------- Boas-vindas ----------------
  pop_menu.6.t:0 "População Híbrida carregada"
- pop_menu.6.d:0 "O mod §YPopulação Híbrida§! está ativo nesta partida.\n\nPopulação de [Root.GetName] no início: §Y[Root.pop_nac_total.GetValue]§! mil habitantes, sendo §G[Root.pop_nac_urbanos.GetValue]§! mil urbanos. Se aparecer zero, a partida veio de um save sem o mod e os dados surgem nos primeiros três meses de jogo.\n\nPara ver estatísticas, camadas de mapa e configurações, abra a aba §YDecisões§! do seu país e use a decisão §YPainel Demográfico§!.\n\nEste aviso aparece só uma vez."
+ pop_menu.6.d:0 "O mod §YPopulação Híbrida§! está ativo nesta partida.\n\nCada país prepara os dados das suas províncias no primeiro processamento, então os números de população aparecem aos poucos ao longo dos §Yprimeiros três meses§! de jogo.\n\nPara ver estatísticas, camadas de mapa e configurações, abra a aba §YDecisões§! do seu país e use a decisão §YPainel Demográfico§!.\n\nEste aviso aparece só uma vez."
  pop_menu.6.painel:0 "Abrir o Painel Demográfico agora"
  pop_menu.6.ok:0 "Entendido"
+
+ # ---------------- Evento oculto (o jogador não vê) ----------------
+ pop_motor.1.t:0 "Processamento demográfico"
+ pop_motor.1.d:0 "Evento interno da População Híbrida."
+ pop_motor.1.a:0 "OK"
 
  # ---------------- Textos dinâmicos ----------------
  pop_txt_modo_alto:0 "§YAlto detalhe§!"

@@ -1,0 +1,27 @@
+# ==========================================================================
+#  População Híbrida - evento oculto que executa a simulação
+#
+#  Disparado por pop_pulso_mensal quando é a vez do país (a cada 2, 3 ou
+#  6 meses, conforme o modo). Fica oculto: o jogador nunca o vê, e a IA o
+#  resolve automaticamente. Rodar o trabalho num evento, e não dentro do
+#  on_action, segue a prática dos mods grandes para evitar travamentos.
+# ==========================================================================
+
+namespace = pop_motor
+
+country_event = {
+	id = pop_motor.1
+	title = pop_motor.1.t
+	desc = pop_motor.1.d
+	picture = CITY_VIEW_eventPicture
+	hidden = yes
+	is_triggered_only = yes
+
+	immediate = {
+		pop_executar_tick = yes
+	}
+
+	option = {
+		name = pop_motor.1.a
+	}
+}

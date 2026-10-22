@@ -10,7 +10,7 @@ Pesquisando como os mods grandes lidam com isso (o Anbennar, por exemplo, que te
 
 O primeiro são os **modificadores ativados por gatilho** (`province_triggered_modifier`). Eles parecem práticos, porque o jogo liga e desliga o bônus sozinho, mas para isso ele testa a condição em toda província o tempo todo. Um sistema de população feito assim testaria milhares de condições sem parar, mesmo quando nada mudou.
 
-O segundo são os **eventos com `mean_time_to_happen`**. O jogo precisa sortear periodicamente se cada um deles dispara, para cada país ou província elegível. Mesmo eventos ocultos têm custo de criação e aparecem no histórico.
+O segundo são os **eventos com `mean_time_to_happen`**. O jogo precisa sortear periodicamente se cada um deles dispara, para cada país ou província elegível. Mesmo eventos ocultos têm custo de criação, então o mod usa só um evento oculto por país a cada processamento, e nunca um por província.
 
 O terceiro são os **laços aninhados sobre o mapa todo**. Imagine uma migração ingênua: para cada província, procurar em todas as outras a melhor de destino. Isso dá 3 000 × 4 900 ≈ 14,7 milhões de comparações por rodada. Se cada país fizer `every_province`, o problema volta com outra cara: 400 países × 4 900 províncias.
 
@@ -47,6 +47,12 @@ Um truque pequeno também economiza variáveis: para exigir que o destino seja p
 ### Modificadores por faixa, trocados só quando a faixa muda
 
 Cada província guarda em `pop_faixa_r`, `pop_faixa_u` e `pop_faixa_p` qual faixa está aplicada. A cada passo o script calcula a faixa nova e só remove e adiciona modificadores se ela for diferente. Como a população muda devagar, na grande maioria dos passos nenhum modificador é tocado. As faixas "neutras" não têm modificador nenhum, o que também deixa menos coisa para o jogo somar.
+
+### Trabalho fora dos ganchos
+
+Os ganchos do jogo (`on_actions`) só fazem contas mínimas. Quando chega a vez de um país, o pulso mensal dispara o evento oculto `pop_motor.1`, e é dentro dele que as províncias são processadas. Isso custa um evento a cada 2, 3 ou 6 meses por país, e não um evento por província.
+
+Essa regra veio de um travamento real. A primeira versão do mod inicializava todas as províncias do mundo dentro do `on_startup`, e o jogo fechou com `EXCEPTION_STACK_OVERFLOW`. Sem acesso ao código do jogo não dá para provar que foi exatamente isso, mas é a suspeita principal: o Anbennar, um dos maiores mods de EU4, tem vários comentários no próprio código sobre isso: lógica movida "para um evento para evitar travamentos", eventos atrasados em um dia "para não causar travamentos" e o aviso de que um evento pesado no início pode causar "tela preta ao iniciar". Por isso a versão atual não inicializa nada no `on_startup`. Cada país prepara as suas províncias no primeiro processamento, e como os países começam em meses sorteados, essa preparação fica espalhada pelos três primeiros meses de jogo.
 
 ### Ganchos em vez de vigilância
 

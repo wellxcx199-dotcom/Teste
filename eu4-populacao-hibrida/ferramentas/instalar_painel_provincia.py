@@ -6,7 +6,8 @@ elemento de interface esteja DENTRO do windowType "province_window", que
 fica no arquivo interface/provinceview.gui do jogo base. Não dá para
 distribuir esse arquivo (ele é da Paradox e muda a cada patch), então este
 script lê a SUA cópia, insere o nosso bloco e grava o resultado na pasta
-interface/ do mod.
+interface/ do mod. Ele também copia a definição do texto (custom_gui), que
+só é instalada junto com o elemento.
 
 Rode de novo sempre que o EU4 receber um patch.
 
@@ -16,6 +17,9 @@ Exemplo (Windows, Steam):
 
 Exemplo mudando a posição do texto dentro da janela:
     python instalar_painel_provincia.py "<pasta do EU4>" --x 40 --y 420
+
+Por padrão grava no mod instalado em Documentos/Paradox Interactive/
+Europa Universalis IV/mod/populacao_hibrida. Use --mod para outra pasta.
 """
 
 import argparse
@@ -24,8 +28,10 @@ import sys
 from pathlib import Path
 
 PASTA_FERRAMENTAS = Path(__file__).resolve().parent
-PASTA_MOD = PASTA_FERRAMENTAS.parent / "populacao_hibrida"
+MOD_INSTALADO = (Path.home() / "Documents" / "Paradox Interactive"
+                 / "Europa Universalis IV" / "mod" / "populacao_hibrida")
 MOLDE = PASTA_FERRAMENTAS / "painel_provincia.gui"
+MOLDE_CUSTOM_GUI = PASTA_FERRAMENTAS / "painel_provincia_custom_gui.txt"
 MARCA_INICIO = "### >>> Populacao Hibrida: inicio"
 JANELA_ALVO = re.compile(r'name\s*=\s*"province_window"')
 
@@ -54,8 +60,8 @@ def main() -> int:
     parser.add_argument("pasta_eu4", type=Path, help="pasta de instalação do EU4")
     parser.add_argument("--x", type=int, default=30, help="posição horizontal (padrão 30)")
     parser.add_argument("--y", type=int, default=440, help="posição vertical (padrão 440)")
-    parser.add_argument("--saida", type=Path, default=PASTA_MOD / "interface",
-                        help="pasta onde gravar o provinceview.gui modificado")
+    parser.add_argument("--mod", type=Path, default=MOD_INSTALADO,
+                        help="pasta do mod instalado (padrão: Documents/.../mod/populacao_hibrida)")
     args = parser.parse_args()
 
     original = args.pasta_eu4 / "interface" / "provinceview.gui"
@@ -72,10 +78,18 @@ def main() -> int:
         print(f"Erro: {erro}", file=sys.stderr)
         return 1
 
-    args.saida.mkdir(parents=True, exist_ok=True)
-    destino = args.saida / "provinceview.gui"
+    if not (args.mod / "descriptor.mod").is_file():
+        print(f"Não achei o mod instalado em {args.mod}. Use --mod com a pasta certa "
+              "(com OneDrive ela costuma ficar em OneDrive/Documentos/...).", file=sys.stderr)
+        return 1
+    destino = args.mod / "interface" / "provinceview.gui"
+    destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_bytes(novo.encode("latin-1"))
+    definicao = args.mod / "common" / "custom_gui" / "pop_painel_provincia.txt"
+    definicao.parent.mkdir(parents=True, exist_ok=True)
+    definicao.write_bytes(MOLDE_CUSTOM_GUI.read_bytes())
     print(f"Pronto: {destino}")
+    print(f"        {definicao}")
     print("Atenção: outros mods que também alteram provinceview.gui vão conflitar com este.")
     return 0
 

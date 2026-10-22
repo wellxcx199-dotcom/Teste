@@ -5,15 +5,19 @@
 #  soma ao do jogo base em vez de substituí-lo, então não copiamos nada do
 #  vanilla e o mod continua compatível com patches e outros mods.
 #
-#  Regra de desempenho usada aqui: nada de eventos com mean_time_to_happen
-#  nem eventos ocultos disparados todo mês. Os pulsos chamam efeitos
-#  diretamente, e as reações a guerra só rodam quando a guerra acontece.
+#  Regras usadas aqui:
+#  1. Os ganchos fazem só contas mínimas. Trabalho pesado vai para um
+#     evento oculto (pop_motor.1), disparado no máximo uma vez a cada
+#     poucos meses por país. Lógica pesada direto dentro de on_action é
+#     uma causa conhecida de travamento do EU4.
+#  2. Nada de eventos com mean_time_to_happen, e as reações à guerra só
+#     rodam quando a guerra acontece.
 # ==========================================================================
 
-# Escopo: país. Dispara na partida nova e também a cada save carregado;
-# pop_iniciar_partida só inicializa o que ainda não tem dados.
+# Escopo: país. Dispara na partida nova e também a cada save carregado.
+# Só agenda o aviso de boas-vindas: nenhuma inicialização em massa aqui,
+# cada país prepara as próprias províncias no primeiro processamento.
 on_startup = {
-	pop_iniciar_partida = yes
 	pop_boas_vindas = yes
 }
 

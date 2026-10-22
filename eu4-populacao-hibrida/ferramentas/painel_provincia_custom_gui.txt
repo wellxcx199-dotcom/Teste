@@ -1,9 +1,10 @@
 # ==========================================================================
 #  População Híbrida - linha de demografia na janela da província
 #
-#  Este bloco só aparece no jogo depois que você roda
-#  ferramentas/instalar_painel_provincia.py, que insere o elemento
-#  "pop_painel_provincia" (scripted = yes) na SUA cópia do provinceview.gui.
+#  Molde: instalar_painel_provincia.py copia este arquivo para
+#  common/custom_gui/ do mod, junto com a SUA cópia do provinceview.gui
+#  já com o elemento "pop_painel_provincia" (scripted = yes). Os dois só
+#  são instalados juntos, para o jogo nunca ter a definição sem o elemento.
 #  Na janela da província, ROOT é a província clicada e FROM é o país
 #  do jogador.
 # ==========================================================================
