@@ -6,7 +6,7 @@ O mod foi escrito para a versão 1.37 do EU4 e depende de os `on_actions` serem 
 
 ## Estrutura da pasta
 
-A pasta `populacao_hibrida/` é o mod em si, e o arquivo `populacao_hibrida.mod` é o que o launcher do jogo lê para saber que o mod existe. O `INSTALAR.bat` copia os dois para o lugar certo no Windows. A pasta `ferramentas/` tem três scripts em Python que não vão para o jogo: o validador, o simulador e o instalador do painel de província. A pasta `docs/` tem o relatório da investigação de desempenho.
+A pasta `populacao_hibrida/` é o mod em si, e o arquivo `populacao_hibrida.mod` é o que o launcher do jogo lê para saber que o mod existe. O `INSTALAR.bat` copia os dois para o lugar certo no Windows, e o `INSTALAR_PAINEL.exe` instala o painel opcional da janela da província. A pasta `ferramentas/` tem o que não vai para o jogo: o validador, o simulador de província, o analisador de travamentos e o código-fonte do instalador do painel. A pasta `docs/` tem o relatório da investigação de desempenho.
 
 Dentro do mod, cada pasta tem um papel. `common/scripted_effects/pop_efeitos.txt` é o motor da simulação, com todo o cálculo de crescimento, urbanização, migração e economia. `common/on_actions/pop_on_actions.txt` liga esse motor aos momentos em que o jogo chama o mod (início da partida, todo mês, fim de cerco). `common/event_modifiers/pop_modificadores.txt` define os bônus e penalidades de cada faixa de população. `decisions/` e `events/` formam a interface: o Painel Demográfico e as camadas de mapa. `localisation/` tem todos os textos em português, e `customizable_localization/` tem os textos que mudam de acordo com o estado do jogo, como "ligada" ou "desligada".
 
@@ -42,13 +42,15 @@ Depois abra o launcher, vá em **Playsets**, adicione "Populacao Hibrida" a um p
 
 ### Painel na janela da província (opcional)
 
-Para mostrar a população dentro da janela da província, o EU4 exige que o elemento esteja dentro do arquivo `interface/provinceview.gui` do jogo base. Esse arquivo é da Paradox e muda a cada patch, então o mod não o distribui. Em vez disso, o script `ferramentas/instalar_painel_provincia.py` lê a sua cópia, insere uma linha de texto e grava o resultado no mod já instalado, junto com a definição desse texto (`common/custom_gui`). As duas partes só são instaladas juntas. Instale o mod primeiro e depois rode, por exemplo numa instalação Steam no Windows:
+Para mostrar a população dentro da janela da província, o EU4 exige que o elemento esteja dentro do arquivo `interface/provinceview.gui` do jogo base. Esse arquivo é da Paradox e muda a cada patch, então o mod não o distribui. Em vez disso, um instalador lê a sua cópia, insere uma linha de texto e grava o resultado no mod já instalado, junto com a definição desse texto (`common/custom_gui`). As duas partes só são instaladas juntas.
 
-```
-python ferramentas/instalar_painel_provincia.py "C:/Program Files (x86)/Steam/steamapps/common/Europa Universalis IV"
-```
+Instale o mod primeiro com o `INSTALAR.bat`. Depois dê dois cliques em `INSTALAR_PAINEL.exe`, que não precisa de Python nem de nada instalado. Ele acha sozinho o mod nos seus Documentos, inclusive com OneDrive, e o jogo na biblioteca do Steam, inclusive em outro disco. Se não achar o jogo, ele pede para você arrastar a pasta do EU4 para a janela. Em seguida pergunta a posição do texto; é só apertar Enter para usar a posição padrão.
 
-No jogo, a janela da província passa a mostrar algo como "População: 64.5 mil | 9.6 urbanos", e passar o mouse em cima mostra camponeses, capacidade, ocupação, atratividade e a última variação. A posição padrão (`--x 30 --y 440`) é um palpite. Se o texto ficar em cima de outro elemento, rode de novo com outros valores, como `--x 40 --y 400`. Lembre que outro mod que também altere `provinceview.gui` vai conflitar com este, e que o script precisa ser rodado de novo depois de cada patch do EU4 e depois de cada vez que você usar o `INSTALAR.bat`, que reinstala o mod do zero. Se a sua pasta Documentos estiver no OneDrive, indique o mod instalado com `--mod "C:/Users/SEU_NOME/OneDrive/Documentos/Paradox Interactive/Europa Universalis IV/mod/populacao_hibrida"`.
+Como o `.exe` não tem assinatura digital paga, o Windows pode mostrar o aviso "O Windows protegeu o computador". Para continuar, clique em **Mais informações** e depois em **Executar assim mesmo**. O código-fonte completo está em `ferramentas/instalador_painel/`, para quem quiser conferir o que ele faz ou gerar o próprio `.exe`.
+
+No jogo, a janela da província passa a mostrar algo como "População: 64.5 mil | 9.6 urbanos", e passar o mouse em cima mostra camponeses, capacidade, ocupação, atratividade e a última variação. A posição padrão (30 na horizontal e 440 na vertical) é um palpite. Se o texto ficar em cima de outro elemento, rode o instalador de novo e escolha outros números, como 40 e 400. Rode de novo também depois de cada patch do EU4 e sempre que usar o `INSTALAR.bat`, que reinstala o mod do zero. Outro mod que também altere `provinceview.gui` vai conflitar com este.
+
+Quem tem Python pode usar o script equivalente `ferramentas/instalar_painel_provincia.py`, que recebe a pasta do jogo e, opcionalmente, `--mod`, `--x` e `--y`.
 
 ## Como jogar
 
@@ -117,7 +119,11 @@ A explicação completa está em `docs/DESEMPENHO.md`. Em resumo, cada país pro
 
 `python ferramentas/simular_provincia.py --dev 5 --guerra 1460-1466` roda a conta de uma província fora do jogo, com a mesma aritmética de 3 casas decimais do EU4, nos três modos de desempenho. Foi com ele que a taxa base subiu de 0,6% para 1,5% ao ano: com 0,6%, uma província levava mais de um século para se recuperar de seis anos de guerra.
 
-`python ferramentas/instalar_painel_provincia.py` foi explicado na instalação.
+`INSTALAR_PAINEL.exe` e o script `python ferramentas/instalar_painel_provincia.py` foram explicados na instalação. O `.exe` é escrito em Go, e o código fica em `ferramentas/instalador_painel/`, com testes (`go test ./...`). Para gerá-lo de novo em qualquer sistema, rode dentro dessa pasta:
+
+```
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o ../../INSTALAR_PAINEL.exe .
+```
 
 `python ferramentas/analisar_minidump.py minidump.dmp` procura a causa de um travamento no arquivo `minidump.dmp` que o EU4 grava quando fecha com erro. Ele acha a thread com a pilha cheia, mostra o ciclo de chamadas repetidas e lista os textos presos na pilha. Foi assim que o travamento das versões 0.1 e 0.2 foi resolvido: o texto `oot.GetName` aparecia 14 886 vezes. Ele precisa da biblioteca `minidump`, que se instala com `pip install minidump`.
 

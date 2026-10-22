@@ -1,7 +1,8 @@
 # ==========================================================================
 #  População Híbrida - linha de demografia na janela da província
 #
-#  Molde: instalar_painel_provincia.py copia este arquivo para
+#  Molde: o instalador do painel (INSTALAR_PAINEL.exe, ou o script
+#  instalar_painel_provincia.py) copia este arquivo para
 #  common/custom_gui/ do mod, junto com a SUA cópia do provinceview.gui
 #  já com o elemento "pop_painel_provincia" (scripted = yes). Os dois só
 #  são instalados juntos, para o jogo nunca ter a definição sem o elemento.

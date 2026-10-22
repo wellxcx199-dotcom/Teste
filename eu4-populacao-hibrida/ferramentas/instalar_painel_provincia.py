@@ -30,8 +30,8 @@ from pathlib import Path
 PASTA_FERRAMENTAS = Path(__file__).resolve().parent
 MOD_INSTALADO = (Path.home() / "Documents" / "Paradox Interactive"
                  / "Europa Universalis IV" / "mod" / "populacao_hibrida")
-MOLDE = PASTA_FERRAMENTAS / "painel_provincia.gui"
-MOLDE_CUSTOM_GUI = PASTA_FERRAMENTAS / "painel_provincia_custom_gui.txt"
+MOLDE = PASTA_FERRAMENTAS / "instalador_painel" / "moldes" / "painel_provincia.gui"
+MOLDE_CUSTOM_GUI = PASTA_FERRAMENTAS / "instalador_painel" / "moldes" / "painel_provincia_custom_gui.txt"
 MARCA_INICIO = "### >>> Populacao Hibrida: inicio"
 JANELA_ALVO = re.compile(r'name\s*=\s*"province_window"')
 

@@ -1,4 +1,4 @@
-			### >>> Populacao Hibrida: inicio (inserido por instalar_painel_provincia.py)
+			### >>> Populacao Hibrida: inicio (inserido pelo instalador do painel)
 			instantTextBoxType = {
 				name = "pop_painel_provincia"
 				position = { x = %X% y = %Y% }
