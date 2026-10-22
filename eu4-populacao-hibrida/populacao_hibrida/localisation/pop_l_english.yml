@@ -66,6 +66,12 @@
  pop_menu.5.t:0 "Como funciona a População Híbrida"
  pop_menu.5.d:0 "Cada província tem uma §Ycapacidade de sustento§! de 15 mil pessoas por ponto de desenvolvimento, aumentada por prosperidade, fazendas, capital e porto, e reduzida pela devastação.\n\nA população cresce de forma §Ylogística§!: rápido quando há espaço e cada vez mais devagar perto da capacidade. Acima dela, encolhe. Cercos, ocupação, saques e devastação causam perdas extras.\n\nA população se divide em §Ycamponeses§!, que geram imposto e soldados, e §Yurbanos§!, que geram produção, poder de comércio e difusão de instituições. A parcela urbana cresce com produção, centros de comércio, mercados, oficinas e manufaturas.\n\nProvíncias lotadas ou pouco atraentes mandam §Yemigrantes§! para vizinhas mais atraentes, e o excesso de gente acelera as suas colônias. Superpopulação persistente pode virar desenvolvimento novo.\n\nNo país, o grau de urbanização define se a sociedade é agrária, em transição, mercantil ou urbana."
 
+ # ---------------- Boas-vindas ----------------
+ pop_menu.6.t:0 "População Híbrida carregada"
+ pop_menu.6.d:0 "O mod §YPopulação Híbrida§! está ativo nesta partida.\n\nPopulação de [Root.GetName] no início: §Y[Root.pop_nac_total.GetValue]§! mil habitantes, sendo §G[Root.pop_nac_urbanos.GetValue]§! mil urbanos. Se aparecer zero, a partida veio de um save sem o mod e os dados surgem nos primeiros três meses de jogo.\n\nPara ver estatísticas, camadas de mapa e configurações, abra a aba §YDecisões§! do seu país e use a decisão §YPainel Demográfico§!.\n\nEste aviso aparece só uma vez."
+ pop_menu.6.painel:0 "Abrir o Painel Demográfico agora"
+ pop_menu.6.ok:0 "Entendido"
+
  # ---------------- Textos dinâmicos ----------------
  pop_txt_modo_alto:0 "§YAlto detalhe§!"
  pop_txt_modo_leve:0 "§YLeve§!"

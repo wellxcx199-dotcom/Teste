@@ -233,3 +233,22 @@ country_event = {
 		country_event = { id = pop_menu.1 }
 	}
 }
+
+# ------------------------------------------------------------ Boas-vindas
+# Disparado uma vez pelo on_startup. Se ele não aparecer ao começar a
+# partida, o mod não foi carregado.
+country_event = {
+	id = pop_menu.6
+	title = pop_menu.6.t
+	desc = pop_menu.6.d
+	picture = CITY_VIEW_eventPicture
+	is_triggered_only = yes
+
+	option = {
+		name = pop_menu.6.painel
+		country_event = { id = pop_menu.1 }
+	}
+	option = {
+		name = pop_menu.6.ok
+	}
+}

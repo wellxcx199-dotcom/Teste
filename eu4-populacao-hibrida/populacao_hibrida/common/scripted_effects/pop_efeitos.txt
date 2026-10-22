@@ -846,6 +846,20 @@ pop_iniciar_partida = {
 # --------------------------------------------------------------------------
 #  MENU (escopo: PAÍS)
 # --------------------------------------------------------------------------
+# Escopo: PAÍS. Aviso único para o jogador humano: confirma que o mod foi
+# carregado e mostra onde fica o painel. A flag impede que ele reapareça
+# a cada save carregado.
+pop_boas_vindas = {
+	if = {
+		limit = {
+			ai = no
+			NOT = { has_country_flag = pop_boas_vindas_vista }
+		}
+		set_country_flag = pop_boas_vindas_vista
+		country_event = { id = pop_menu.6 }
+	}
+}
+
 pop_desligar_camadas = {
 	clr_country_flag = pop_mapa_superpovoadas
 	clr_country_flag = pop_mapa_subpovoadas
