@@ -37,6 +37,11 @@ final class CloudShapes {
     final float[] y0a, y1a, y0b, y1b;
     final byte[] matA, matB;          // matA: corpo; matB: bigorna (CUMULONIMBUS) ou vazio
     final float[] towerBase, towerTop; // para o degradê escuro das torres
+    /** Detalhe de cada trecho, para o renderizador escolher textura e transparência. */
+    static final byte DECO_NONE = 0, DECO_MAMMATUS = 1, DECO_PILEUS = 2, DECO_SHELF = 3;
+    final byte[] decoA, decoB;
+    /** Primeira coluna (no mundo) do recorte: o ruído dos fiapos usa coordenadas do mundo. */
+    private final int colX0, colZ0;
     /** Opacidade de cada trecho (corpo e bigorna): nuvens surgindo ou se desfazendo. */
     final float[] opA, opB;
     final List<Float> rainOp = new ArrayList<>();
@@ -58,6 +63,9 @@ final class CloudShapes {
         matA = new byte[n]; matB = new byte[n];
         towerBase = new float[n]; towerTop = new float[n];
         opA = new float[n]; opB = new float[n];
+        decoA = new byte[n]; decoB = new byte[n];
+        colX0 = (int) Math.floor(p.originX() / colW);
+        colZ0 = (int) Math.floor(p.originZ() / colW);
         time = p.time();
         java.util.Arrays.fill(matA, EMPTY);
         java.util.Arrays.fill(matB, EMPTY);
@@ -69,7 +77,8 @@ final class CloudShapes {
         for (StormInfo st : p.storms())
             if (st.stormKind() == Storm.Kind.HURRICANE) eyes.add(new double[] {st.x(), st.z(), 0.55 * st.radius()});
         float[] cbScale = clusterLeaders(p, types);
-        try { buildCells(p, types, cbScale, cellX0, cellZ0); } finally { wallClouds = List.copyOf(walls); }
+        try { buildCells(p, types, cbScale, cellX0, cellZ0); }
+        finally { wallClouds = List.copyOf(walls); matureStorms = List.copyOf(storms); }
     }
 
     private void buildCells(CloudInput p, CloudType[] types, float[] cbScale, int cellX0, int cellZ0) {
@@ -81,7 +90,8 @@ final class CloudShapes {
                 if (t == CloudType.CLEAR || t == CloudType.FOG) continue;
                 float cover = (p.cover()[idx] & 0xFF) / 255f;
                 int base = p.baseY()[idx], top = p.topY()[idx];
-                curOp = cbScale[idx] < 0 ? Math.max(0.6f, p.opacity()[idx]) : p.opacity()[idx];
+                // A supercélula vem da lista de fenômenos e já existe inteira (sem fiapos).
+                curOp = cbScale[idx] < 0 ? 1f : p.opacity()[idx];
                 curAnvil = cbScale[idx] < 0 ? Math.max(0.6f, p.anvil()[idx]) : p.anvil()[idx];
                 curAnvilOp = curOp * Math.min(1, curAnvil * 1.5f);
                 curAnvilTop = p.anvilTop()[idx];
@@ -109,6 +119,12 @@ final class CloudShapes {
     /** Nuvens-parede das supercélulas (x, z, Y da base), para o funil do tornado terminar nelas. */
     static volatile List<double[]> wallClouds = List.of();
     private final List<double[]> walls = new ArrayList<>();
+    /**
+     * Cumulonimbos com bigorna, para os raios (LightningFx): x, z (blocos, sem o vento desde a
+     * montagem), Y da base, Y do topo da torre, raio da torre em blocos e maturidade (0 a 1).
+     */
+    static volatile List<double[]> matureStorms = List.of();
+    private final List<double[]> storms = new ArrayList<>();
     /** Olhos de furacão (x, z, raio em blocos): o ar desce ali e nenhuma bigorna os cobre. */
     private final List<double[]> eyes = new ArrayList<>();
 
@@ -217,7 +233,9 @@ final class CloudShapes {
     private void congestus(int i, int j, int cellX, int cellZ, int base, int top, float cover) {
         float full = top - base, h = Math.min(full, Math.max(40, 0.6f * full));
         double ccx = 2 + (rnd(cellX, cellZ, 70) - 0.5) + sproutX(), ccz = 2 + (rnd(cellX, cellZ, 71) - 0.5) + sproutZ();
-        dome(i, j, cellX, cellZ, ccx, ccz, towerRadius(h) * (0.8 + 0.25 * cover), h, base, CloudType.CUMULUS, 2 + 5 * curBoil);
+        double r = towerRadius(h) * (0.8 + 0.25 * cover);
+        dome(i, j, cellX, cellZ, ccx, ccz, r, h, base, CloudType.CUMULUS, 2 + 5 * curBoil);
+        pileus(i * COLS_PER_CELL, j * COLS_PER_CELL, ccx, ccz, r, base + h + 3 + 5 * curBoil);
     }
 
     /**
@@ -262,7 +280,14 @@ final class CloudShapes {
                 if (d < (supercell ? 0.75 : 0.6) && (rnd(wx, wz, 55) < 0.6)) addRain(gx, gz, y0);
             }
         if (supercell) walls.add(new double[] {originX + (gx0 + ccx) * colW, originZ + (gz0 + ccz) * colW, base - 7});
-        if (!hasAnvil) return;
+        if (!hasAnvil) {
+            pileus(gx0, gz0, ccx, ccz, rt, base + towerH + 4 + 6 * curBoil);
+            return;
+        }
+        float mature = curAnvil * curOp;
+        storms.add(new double[] {originX + (gx0 + ccx) * colW, originZ + (gz0 + ccz) * colW, base, base + towerH,
+                rt * colW, mature});
+        if (mature > 0.3f) shelf(gx0, gz0, ccx, ccz, rt, base, (mature - 0.3f) / 0.7f);
         ra *= 0.2 + 0.8 * Math.sqrt(curAnvil);                      // a bigorna se espalha aos poucos
         // Bigorna: o vento em altitude a estica bastante para a frente (sotavento) e pouco para
         // trás. É grossa junto à torre e afina até poucos blocos nas bordas.
@@ -282,17 +307,132 @@ final class CloudShapes {
                 float y0 = y1 - thick;
                 double dt = Math.hypot(a + 0.5 - ccx, b + 0.5 - ccz);
                 if (supercell && dt < rt * 0.3) y1 += Math.round(6 * (1 - dt / (rt * 0.3)));   // topo saliente
-                setB(gx0 + a, gz0 + b, y0, y1);
+                // Mammatus: bolsas de ar frio e úmido que afundam sob a bigorna madura, mais
+                // comuns na parte de baixo da bigorna que o vento levou para longe da torre.
+                float pouch = 0;
+                if (curAnvil > 0.6f && along > 0 && d > 0.3 && d < 0.92 && dt > rt * 1.1) {
+                    float m = Math.min(1, (curAnvil - 0.6f) / 0.4f) * (float) (1 - Math.abs(d - 0.6) / 0.33);
+                    if (m > 0) pouch = Math.round(4 * m * mammatus(wx, wz));
+                }
+                setB(gx0 + a, gz0 + b, y0 - pouch, y1);
+                if (pouch > 0) markB(gx0 + a, gz0 + b, DECO_MAMMATUS);
             }
     }
+
+    /**
+     * Pileus: o topo que sobe depressa empurra uma camada úmida e a resfria, formando um
+     * capuz liso e efêmero logo acima; a torre o fura em seguida. Aparece no meio do
+     * crescimento (curGrow entre 0,3 e 0,85), quando a corrente ascendente é mais forte.
+     */
+    private void pileus(int gx0, int gz0, double ccx, double ccz, double rt, float capY) {
+        if (curBoil < 0.5f || curGrow < 0.3f || curGrow > 0.85f) return;
+        float strength = (float) Math.sin(Math.PI * (curGrow - 0.3f) / 0.55f) * curOp;
+        if (strength < 0.15f) return;
+        double r = rt * 0.8;
+        int reach = (int) Math.ceil(r) + 1;
+        for (int b = -reach; b <= reach; b++)
+            for (int a = -reach; a <= reach; a++) {
+                double d = Math.hypot(a + 0.5 - (ccx - Math.floor(ccx)) , b + 0.5 - (ccz - Math.floor(ccz))) / r;
+                if (d >= 1) continue;
+                int gx = gx0 + (int) Math.floor(ccx) + a, gz = gz0 + (int) Math.floor(ccz) + b;
+                float y0 = capY - Math.round(3 * (float) (d * d));         // capuz curvado como um chapéu
+                float save = curAnvilOp;
+                curAnvilOp = strength;
+                setB(gx, gz, y0, y0 + 2);
+                curAnvilOp = save;
+                markB(gx, gz, DECO_PILEUS);
+            }
+    }
+
+    /**
+     * Nuvem-prateleira (arcus): o ar frio que desce com a chuva se espalha pelo chão à frente
+     * da tempestade e levanta o ar quente como uma rampa. Fica no lado para onde a tempestade
+     * anda, em arco, abaixo da base; a borda da frente é a mais baixa.
+     */
+    private void shelf(int gx0, int gz0, double ccx, double ccz, double rt, int base, float m) {
+        double inner = rt * 1.0, outer = rt * (1.15 + 0.45 * m);
+        int reach = (int) Math.ceil(outer) + 1;
+        for (int b = -reach; b < COLS_PER_CELL + reach; b++)
+            for (int a = -reach; a < COLS_PER_CELL + reach; a++) {
+                double dx = a + 0.5 - ccx, dz = b + 0.5 - ccz, dist = Math.hypot(dx, dz);
+                if (dist < inner || dist > outer) continue;
+                double along = (dx * windX + dz * windZ) / dist;
+                if (along < 0.55) continue;                             // só na frente da tempestade (±56°)
+                float edge = (float) ((along - 0.55) / 0.45);           // 1 bem na frente, 0 nas pontas do arco
+                double out = inner + (outer - inner) * (0.35 + 0.65 * edge);
+                if (dist > out) continue;
+                double t = (dist - inner) / (out - inner);              // 0 junto à torre, 1 na borda
+                // Cunha: topo liso descendo para a frente e base rasgada, mais baixa na borda.
+                float y1 = base + 2 - Math.round(5 * (float) t);
+                float y0 = base - Math.round((2 + 7 * (float) t) * (0.4f + 0.6f * edge) * (0.5f + 0.5f * m));
+                if (y1 - y0 < 1) continue;
+                int gx = gx0 + a, gz = gz0 + b;
+                setA(gx, gz, y0, y1, CloudType.CUMULONIMBUS);
+                markA(gx, gz, DECO_SHELF);
+            }
+    }
+
+    /**
+     * Profundidade (0 a 1) da bolsa de mammatus sob a coluna: bolsas de tamanhos diferentes,
+     * espalhadas sem padrão (cada célula de 3x3 colunas tem a sua, deslocada ao acaso), e
+     * algumas células vazias.
+     */
+    private static float mammatus(int wx, int wz) {
+        int cx = Math.floorDiv(wx, 3), cz = Math.floorDiv(wz, 3);
+        float best = 0;
+        for (int dz = -1; dz <= 1; dz++)
+            for (int dx = -1; dx <= 1; dx++) {
+                int ix = cx + dx, iz = cz + dz;
+                if (rnd(ix, iz, 57) < 0.3) continue;                    // sem bolsa nesta célula
+                double px = ix * 3 + 3 * rnd(ix, iz, 58), pz = iz * 3 + 3 * rnd(ix, iz, 59);
+                double size = 1.1 + 1.3 * rnd(ix, iz, 60);
+                double r = Math.hypot(wx + 0.5 - px, wz + 0.5 - pz) / size;
+                if (r < 1) best = Math.max(best, (float) Math.sqrt(1 - r * r));
+            }
+        return best;
+    }
+
+    private void markA(int gx, int gz, byte d) {
+        if (gx >= 0 && gz >= 0 && gx < cols && gz < cols && matA[index(gx, gz)] != EMPTY) decoA[index(gx, gz)] = d;
+    }
+
+    private void markB(int gx, int gz, byte d) {
+        if (gx >= 0 && gz >= 0 && gx < cols && gz < cols && matB[index(gx, gz)] != EMPTY) decoB[index(gx, gz)] = d;
+    }
+
+    /**
+     * Nuvens nascendo ou se desfazendo não ficam só transparentes: elas aparecem e somem em
+     * fiapos (cúmulos fractus), como as de verdade, que começam como farrapos que se juntam e
+     * terminam rasgadas pelo ar seco. Retorna a opacidade da coluna, ou -1 se ela ainda (ou já)
+     * não existe; {@code frac} recebe a fração da altura que a coluna mantém.
+     */
+    private float wisp(int gx, int gz, float op, int salt, float[] frac) {
+        frac[0] = 1;
+        if (op >= 0.999f) return op;
+        int wx = colX0 + gx, wz = colZ0 + gz;
+        double n = 0.7 * vnoise(wx / 2.2, wz / 2.2, salt) + 0.3 * rnd(wx, wz, salt + 1);
+        float keep = op * 1.4f - (float) n;
+        if (keep <= 0) return -1;
+        frac[0] = Math.min(1, keep * 1.2f);
+        return Math.min(1, 0.45f + keep * 1.6f) * Math.min(1, op * 3);
+    }
+
+    private final float[] wispFrac = new float[1];
 
     int index(int gx, int gz) { return gz * cols + gx; }
 
     private void setA(int gx, int gz, float y0, float y1, CloudType t) {
         if (gx < 0 || gz < 0 || gx >= cols || gz >= cols || y1 - y0 < 1) return;
+        float op = wisp(gx, gz, curOp, 81, wispFrac);
+        if (op < 0) return;
+        if (wispFrac[0] < 1) {                                       // farrapo: um pedaço no meio da nuvem
+            float h = y1 - y0, hk = Math.max(1, Math.round(h * wispFrac[0] * wispFrac[0]));
+            y0 += Math.round((h - hk) * (float) rnd(colX0 + gx, colZ0 + gz, 83) * 0.8f);
+            y1 = y0 + hk;
+        }
         int k = index(gx, gz);
         if (matA[k] != EMPTY && y1a[k] - y0a[k] >= y1 - y0) return;   // fica o trecho maior
-        y0a[k] = y0; y1a[k] = y1; matA[k] = (byte) t.ordinal(); opA[k] = curOp;
+        y0a[k] = y0; y1a[k] = y1; matA[k] = (byte) t.ordinal(); opA[k] = op; decoA[k] = DECO_NONE;
     }
 
     private void setB(int gx, int gz, float y0, float y1) {
@@ -300,7 +440,9 @@ final class CloudShapes {
         int k = index(gx, gz);
         if (matB[k] != EMPTY) return;
         if (matA[k] != EMPTY && y1a[k] > y0) return;                   // não atravessa outra nuvem
-        y0b[k] = y0; y1b[k] = y1; matB[k] = (byte) CloudType.CUMULONIMBUS.ordinal(); opB[k] = curAnvilOp;
+        float op = wisp(gx, gz, curAnvilOp, 91, wispFrac);             // bigorna órfã se desfaz em fiapos
+        if (op < 0) return;
+        y0b[k] = y0; y1b[k] = y1; matB[k] = (byte) CloudType.CUMULONIMBUS.ordinal(); opB[k] = op; decoB[k] = DECO_NONE;
     }
 
     private void addRain(int gx, int gz, float top) {
@@ -321,6 +463,7 @@ final class CloudShapes {
                 double ccx = 2 + 1.2 * (rnd(cellX, cellZ, 10) - 0.5) + sproutX();
                 double ccz = 2 + 1.2 * (rnd(cellX, cellZ, 20) - 0.5) + sproutZ();
                 dome(i, j, cellX, cellZ, ccx, ccz, r0, h, base, t, 1.5 + 3 * curBoil);
+                if (h > 18) pileus(gx0, gz0, ccx, ccz, r0, base + h + 2 + 3 * curBoil);   // cúmulo virando congesto
                 int puffs = (cover > 0.5f ? 1 : 0) + (cover > 0.8f ? 1 : 0);
                 for (int q = 1; q <= puffs; q++) {
                     double ang = 6.283 * rnd(cellX, cellZ, 30 + q), dist = r0 * (0.7 + 0.3 * rnd(cellX, cellZ, 35 + q));

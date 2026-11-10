@@ -4,6 +4,8 @@ import br.climate.core.CloudType;
 import br.climate.mod.ClimateMod;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
@@ -43,10 +45,13 @@ public final class CloudRenderer {
             ResourceLocation.fromNamespaceAndPath(ClimateMod.ID, "textures/environment/clouds_atlas.png");
     // Quadros do atlas, na ordem de tools/gerar_texturas_nuvens.py.
     private static final int TILE_TOP = 0, TILE_SIDE = 1, TILE_BOTTOM = 2, TILE_STORM_SIDE = 3,
-            TILE_STORM_BOTTOM = 4, TILE_CIRRUS = 5, TILE_RAIN = 6, TILE_ANVIL = 7;
+            TILE_STORM_BOTTOM = 4, TILE_CIRRUS = 5, TILE_RAIN = 6, TILE_ANVIL = 7,
+            TILE_MAMMATUS = 8, TILE_SHELF = 9, TILE_PILEUS = 12;
+    /** Quadros da animação da chuva (o mesmo desenho descendo 4 pixels por quadro). */
+    private static final int[] RAIN_FRAMES = {TILE_RAIN, 13, 14, 15};
     /** Altura (em blocos) coberta por uma repetição da textura nas laterais. */
     private static final float TILE_BLOCKS = 4f;
-    private static final float TU = 1 / 4f, TV = 1 / 2f;   // tamanho de um quadro no atlas (4x2 quadros)
+    private static final float TU = 1 / 4f, TV = 1 / 4f;   // tamanho de um quadro no atlas (4x4 quadros)
     private static final CloudType[] TYPES = CloudType.values();
 
     private static VertexBuffer solid, glass;
@@ -56,12 +61,19 @@ public final class CloudRenderer {
     private static double builtCamX, builtCamY, builtCamZ, builtOffX, builtOffZ;
     private static long builtAt = Long.MIN_VALUE;
     private static boolean builtInside;
+    /**
+     * Cortinas de chuva da última montagem (x0, z0, x1, z1, topo, cinza, alfa). Ficam fora da
+     * malha guardada porque são redesenhadas a cada quadro, com a textura descendo.
+     */
+    private static float[] rain = new float[0];
+    private static int rainCount;
 
     /** Esquece a malha montada (troca de mundo): a próxima imagem monta outra do zero. */
     static void invalidate() {
         builtFor = null;
         builtAt = Long.MIN_VALUE;
         solidEmpty = glassEmpty = true;
+        rainCount = 0;
     }
 
     public static void render(WorldRenderContext ctx) {
@@ -89,7 +101,7 @@ public final class CloudRenderer {
             builtCamX = cam.x; builtCamY = cam.y; builtCamZ = cam.z; builtOffX = offX; builtOffZ = offZ;
         }
         ClientClimate.setInsideCloud(builtInside);
-        if (solidEmpty && glassEmpty) return;
+        if (solidEmpty && glassEmpty && rainCount == 0) return;
 
         PoseStack ps = ctx.matrixStack();
         ps.pushPose();
@@ -109,6 +121,12 @@ public final class CloudRenderer {
         RenderSystem.enableDepthTest();
         RenderSystem.depthFunc(GL11.GL_LEQUAL);
         RenderSystem.disableCull();
+        // Clarão de raio: a nuvem toda se acende por um instante (LightningFx).
+        // O relâmpago acende a nuvem por dentro até um cinza-claro, qualquer que seja a hora:
+        // de dia isso quase não muda nada; à noite a nuvem escura brilha inteira.
+        float tintNow = (float) Math.max(0.08, level.getCloudColor(pt).x);
+        float flash = 1 + LightningFx.flash(pt) * Math.max(0.15f, 0.9f - tintNow) / tintNow;
+        RenderSystem.setShaderColor(flash, flash, flash, 1);
         if (!solidEmpty) {
             solid.bind();
             RenderSystem.colorMask(false, false, false, false);   // 1ª passada: só profundidade
@@ -124,10 +142,31 @@ public final class CloudRenderer {
             glass.drawWithShader(pose, proj, shader);
         }
         VertexBuffer.unbind();
+        RenderSystem.setShaderColor(1, 1, 1, 1);
+        drawRain(cam, offX - builtOffX, offZ - builtOffZ, level.getGameTime() + pt);
         RenderSystem.depthMask(true);
         RenderSystem.enableCull();
         RenderSystem.disableBlend();
         ps.popPose();
+    }
+
+    /** Cortinas de chuva com a textura descendo (4 quadros), desenhadas a cada imagem. */
+    private static void drawRain(Vec3 cam, double dx, double dz, double time) {
+        if (rainCount == 0) return;
+        int tile = RAIN_FRAMES[(int) (time / 2) & 3];
+        BufferBuilder bb = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
+        for (int q = 0; q < rainCount; q++) {
+            int o = q * 7;
+            double x0 = rain[o] + dx, z0 = rain[o + 1] + dz, x1 = rain[o + 2] + dx, z1 = rain[o + 3] + dz;
+            rainQuad(bb, cam, x0, z0, x1, z1, rain[o + 4], rain[o + 5], rain[o + 6], tile);
+            rainQuad(bb, cam, x0, z1, x1, z0, rain[o + 4], rain[o + 5], rain[o + 6], tile);
+        }
+        MeshData mesh = bb.build();
+        if (mesh == null) return;
+        RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
+        RenderSystem.setShaderTexture(0, ATLAS);
+        RenderSystem.depthMask(false);
+        BufferUploader.drawWithShader(mesh);
     }
 
     // ---------- Montagem da malha ----------
@@ -161,22 +200,28 @@ public final class CloudRenderer {
                     float y0 = layer == 0 ? s.y0a[k] : s.y0b[k], y1 = layer == 0 ? s.y1a[k] : s.y1b[k];
                     double x0 = cx + gx * s.colW, z0 = cz + gz * s.colW, x1 = x0 + s.colW, z1 = z0 + s.colW;
                     float op = layer == 0 ? s.opA[k] : s.opB[k];
+                    byte deco = layer == 0 ? s.decoA[k] : s.decoB[k];
                     Look look = look(TYPES[mat], layer == 1, cam, x0, y0, z0, x1, y1, z1, radius, tint, fog, op);
                     if (look == null) continue;
-                    emitColumn(look.glass() ? gb : sb, s, k, gx, gz, layer, TYPES[mat], y0, y1, x0, z0, x1, z1, look, cam);
+                    if (deco == CloudShapes.DECO_PILEUS)            // capuz: véu fino, sempre translúcido
+                        look = new Look(look.r(), look.g(), look.b(), look.a() * 0.7f, true);
+                    else if (deco == CloudShapes.DECO_SHELF)        // prateleira: cinza de tempestade
+                        look = new Look(look.r() * 0.82f, look.g() * 0.84f, look.b() * 0.88f, look.a(), look.glass());
+                    emitColumn(look.glass() ? gb : sb, s, k, gx, gz, layer, TYPES[mat], deco, y0, y1, x0, z0, x1, z1, look, cam);
                 }
             }
-        // Cortinas de chuva: dois planos cruzados por coluna, sumindo para baixo.
+        // Cortinas de chuva: guardadas para serem desenhadas a cada quadro (animadas).
+        if (rain.length < s.rain.size() * 7) rain = new float[s.rain.size() * 7];
+        rainCount = 0;
         for (int q = 0; q < s.rain.size(); q++) {
             int gx = s.rain.get(q)[0], gz = s.rain.get(q)[1];
-            float top = s.rainTop.get(q);
             double x0 = cx + gx * s.colW, z0 = cz + gz * s.colW, x1 = x0 + s.colW, z1 = z0 + s.colW;
             double dist = Math.hypot((x0 + x1) / 2 - cam.x, (z0 + z1) / 2 - cam.z);
             if (dist > radius * 0.9) continue;
             float a = 0.75f * s.rainOp.get(q) * (float) Math.min(1, (radius * 0.9 - dist) / (0.2 * radius));
-            float c = (float) (0.85 * tint.x);
-            rainQuad(gb, cam, x0, z0, x1, z1, top, c, a);
-            rainQuad(gb, cam, x0, z1, x1, z0, top, c, a);
+            int o = rainCount++ * 7;
+            rain[o] = (float) x0; rain[o + 1] = (float) z0; rain[o + 2] = (float) x1; rain[o + 3] = (float) z1;
+            rain[o + 4] = s.rainTop.get(q); rain[o + 5] = (float) (0.85 * tint.x); rain[o + 6] = a;
         }
 
         solidEmpty = upload(solid, sb);
@@ -225,11 +270,19 @@ public final class CloudRenderer {
 
     /** Topo, base e as laterais expostas (não cobertas pelas colunas vizinhas) de um trecho. */
     private static void emitColumn(BufferBuilder bb, CloudShapes s, int k, int gx, int gz, int layer, CloudType type,
-                                   float y0, float y1, double x0, double z0, double x1, double z1, Look c, Vec3 cam) {
+                                   byte deco, float y0, float y1, double x0, double z0, double x1, double z1, Look c, Vec3 cam) {
         boolean cirrus = type == CloudType.CIRRUS;
         boolean storm = type == CloudType.NIMBOSTRATUS || (type == CloudType.CUMULONIMBUS && layer == 0);
         int topTile = cirrus ? TILE_CIRRUS : layer == 1 ? TILE_ANVIL : TILE_TOP;
         int bottomTile = cirrus ? TILE_CIRRUS : storm ? TILE_STORM_BOTTOM : TILE_BOTTOM;
+        float bottomShade = 0.7f;
+        int sideTile = -1;
+        switch (deco) {
+            case CloudShapes.DECO_MAMMATUS -> { bottomTile = TILE_MAMMATUS; bottomShade = 0.78f; }
+            case CloudShapes.DECO_PILEUS -> { topTile = bottomTile = sideTile = TILE_PILEUS; bottomShade = 0.9f; }
+            case CloudShapes.DECO_SHELF -> { topTile = TILE_SHELF; bottomTile = TILE_STORM_BOTTOM; sideTile = TILE_SHELF; }
+            default -> {}
+        }
         float X0 = (float) (x0 - cam.x), X1 = (float) (x1 - cam.x), Z0 = (float) (z0 - cam.z), Z1 = (float) (z1 - cam.z);
         float Y0 = (float) (y0 - cam.y), Y1 = (float) (y1 - cam.y);
 
@@ -237,7 +290,7 @@ public final class CloudRenderer {
         if (!(layer == 0 && s.matB[k] != CloudShapes.EMPTY && s.y0b[k] <= y1))
             face(bb, topTile, X0, Y1, Z0, X0, Y1, Z1, X1, Y1, Z1, X1, Y1, Z0, c, 1.0f);
         if (!(layer == 1 && s.matA[k] != CloudShapes.EMPTY && s.y1a[k] >= y0))
-            face(bb, bottomTile, X0, Y0, Z0, X1, Y0, Z0, X1, Y0, Z1, X0, Y0, Z1, c, 0.7f);
+            face(bb, bottomTile, X0, Y0, Z0, X1, Y0, Z0, X1, Y0, Z1, X0, Y0, Z1, c, bottomShade);
 
         if (cirrus) return;                                    // fiapos: só topo e base, sem laterais
         int[][] dirs = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};    // norte, sul, oeste, leste
@@ -254,7 +307,7 @@ public final class CloudRenderer {
                 if (s.matB[n] != CloudShapes.EMPTY) parts = subtract(parts, s.y0b[n], s.y1b[n]);
             }
             for (float[] part : parts)
-                sideSegments(bb, s, k, type, storm, d, part[0], part[1], y0, y1, X0, X1, Z0, Z1, c, shade[d], cam);
+                sideSegments(bb, s, k, type, storm, sideTile, d, part[0], part[1], y0, y1, X0, X1, Z0, Z1, c, shade[d], cam);
         }
     }
 
@@ -269,7 +322,7 @@ public final class CloudRenderer {
     }
 
     /** Divide uma lateral em pedaços de TILE_BLOCKS de altura, cada um com a textura inteira. */
-    private static void sideSegments(BufferBuilder bb, CloudShapes s, int k, CloudType type, boolean storm,
+    private static void sideSegments(BufferBuilder bb, CloudShapes s, int k, CloudType type, boolean storm, int forced,
                                      int dir, float lo, float hi, float y0, float y1,
                                      float X0, float X1, float Z0, float Z1, Look c, float shade, Vec3 cam) {
         float towerB = s.towerBase[k], towerT = s.towerTop[k];
@@ -282,6 +335,7 @@ public final class CloudRenderer {
             if (type == CloudType.CIRRUS) tile = TILE_CIRRUS;
             else if (type == CloudType.NIMBOSTRATUS) tile = TILE_STORM_SIDE;
             else if (storm && towerT > towerB && (yt - towerB) / (towerT - towerB) < 0.45f) tile = TILE_STORM_SIDE;
+            if (forced >= 0) tile = forced;
             float vFrac = (yt - yb) / TILE_BLOCKS;             // o último pedaço pode ser menor que o quadro
             float Yt = (float) (yt - cam.y), Yb = (float) (yb - cam.y);
             switch (dir) {
@@ -323,9 +377,9 @@ public final class CloudRenderer {
     }
 
     private static void rainQuad(BufferBuilder bb, Vec3 cam, double xa, double za, double xb, double zb,
-                                 float top, float c, float alpha) {
+                                 float top, float c, float alpha, int tile) {
         float Xa = (float) (xa - cam.x), Za = (float) (za - cam.z), Xb = (float) (xb - cam.x), Zb = (float) (zb - cam.z);
-        float u = u0(TILE_RAIN), v = v0(TILE_RAIN), cb = Math.min(1, c * 1.06f);
+        float u = u0(tile), v = v0(tile), cb = Math.min(1, c * 1.06f);
         int segs = (int) (CloudShapes.RAIN_DEPTH / TILE_BLOCKS);
         for (int seg = 0; seg < segs; seg++) {
             float yt = top - seg * TILE_BLOCKS, yb = yt - TILE_BLOCKS;

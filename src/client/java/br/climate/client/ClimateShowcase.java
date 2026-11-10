@@ -30,18 +30,20 @@ final class ClimateShowcase {
     static void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) ->
                 dispatcher.register(ClientCommandManager.literal("climavitrine").executes(ctx -> {
-                    if (ClientClimate.showcase() != null) {
-                        ClientClimate.setShowcase(null, null);
-                        ctx.getSource().sendFeedback(Component.literal("Vitrine de nuvens desligada."));
-                    } else {
-                        LocalPlayer player = ctx.getSource().getPlayer();
-                        ClientClimate.setShowcase(build(player, true), build(player, false));
-                        ctx.getSource().sendFeedback(Component.literal(
-                                "Vitrine ao norte: cúmulos, estratos, nimbostratos, cumulonimbo e cirros (oeste → leste); "
-                                        + "mais longe, uma linha de instabilidade se formando."));
-                    }
+                    ctx.getSource().sendFeedback(Component.literal(toggle(ctx.getSource().getPlayer())));
                     return Command.SINGLE_SUCCESS;
                 })));
+    }
+
+    /** Liga ou desliga a vitrine; retorna a mensagem para o jogador. */
+    static String toggle(LocalPlayer player) {
+        if (ClientClimate.showcase() != null) {
+            ClientClimate.setShowcase(null, null);
+            return "Vitrine de nuvens desligada.";
+        }
+        ClientClimate.setShowcase(build(player, true), build(player, false));
+        return "Vitrine ao norte: cúmulos, estratos, nimbostratos, cumulonimbo e cirros (oeste → leste); "
+                + "mais longe, uma linha de instabilidade se formando.";
     }
 
     /** Recorte da vitrine centrado no jogador; com clouds = false, o mesmo recorte de céu limpo. */

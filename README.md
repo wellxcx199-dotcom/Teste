@@ -37,6 +37,11 @@ disponíveis (Fabric e NeoForge), o que facilita usar o mod junto com outros.
 ./gradlew runServer    # servidor dedicado com o mod (aceite a EULA em run/eula.txt)
 ```
 
+Para gravar demonstrações sem digitar comandos, abra o cliente com
+`-Dclimamod.script=roteiro.txt`. Cada linha do roteiro é "segundos ação": `/comando`, `vitrine`,
+`hud off`, `shot nome` (print em `run/screenshots`), `mark nome` (marca no log), `wait clima`
+(espera o clima do servidor) e `quit`. Sem essa opção o roteiro fica desligado.
+
 ## Como usar
 
 | Comando ou tecla | O que faz |
@@ -115,6 +120,9 @@ As texturas são pixel art de 16×16 num único atlas,
 script `tools/gerar_texturas_nuvens.py` (rode `python3 tools/gerar_texturas_nuvens.py`
 depois de mudar o script; precisa do Pillow). Também dá para editar o PNG direto num editor
 de imagens. Elas são quase brancas porque a cor vem da hora do dia e do tipo de nuvem.
+O atlas tem 16 quadros (4×4); os marcados com * na imagem abaixo são os detalhes de
+tempestade: base com mammatus, lateral da nuvem-prateleira, funil e poeira do tornado, o
+capuz (pileus) e os quadros da animação da chuva.
 
 ![Texturas das nuvens](docs/texturas-nuvens.png)
 
@@ -167,6 +175,35 @@ congesto e depois cumulonimbo sem saltos de tamanho.
 
 A animação completa está em [docs/evolucao_cumulonimbo.gif](docs/evolucao_cumulonimbo.gif)
 (rode `/climavitrine` para ver a sequência no jogo).
+
+### Detalhes de tempestade
+
+Os efeitos seguem o que se observa nas nuvens de verdade:
+
+- **Fiapos (fractus).** Nuvens que nascem ou se desfazem não ficam só transparentes: surgem como
+  farrapos soltos que se juntam e terminam rasgadas pelo ar seco. A bigorna órfã de um cumulonimbo
+  morto se desfaz do mesmo jeito.
+- **Pileus.** Quando uma torre sobe depressa, empurra uma camada úmida acima dela e forma um capuz
+  liso e efêmero, que a torre fura logo depois. Aparece no meio do crescimento dos congestos e
+  cumulonimbos.
+- **Mammatus.** Sob a bigorna madura, principalmente na parte que o vento levou para longe da torre,
+  pendem bolsas de ar frio e úmido, de tamanhos e posições irregulares.
+- **Nuvem-prateleira (arcus).** O ar frio que desce com a chuva se espalha à frente da tempestade e
+  levanta o ar quente como uma rampa. A prateleira aparece em arco no lado para onde a tempestade
+  anda, em cunha, mais baixa na borda.
+- **Raios.** Cumulonimbos maduros dão descargas. A maioria fica dentro da nuvem e a acende por dentro
+  (forte à noite, quase nada de dia), piscando a cada retorno. Uma em cada três ou quatro desce até o
+  chão sob a torre, com ramificações, e o trovão chega com atraso proporcional à distância. São só
+  efeitos visuais e sonoros no cliente: fogo e dano continuam sendo os das trovoadas do jogo.
+- **Chuva animada.** As cortinas de chuva sob as nuvens agora caem (quatro quadros de animação).
+- **Ciclo do tornado.** O funil de condensação desce aos poucos da nuvem-parede; antes de tocar o chão
+  já aparece o redemoinho de poeira embaixo. No fim, o tornado entra no estágio de "corda": afina,
+  se inclina e se contorce, a poeira some e a parte de baixo sobe até desaparecer.
+
+![Detalhes de tempestade](docs/detalhes-tempestade.jpg)
+
+Os vídeos [docs/video-cumulonimbo.mp4](docs/video-cumulonimbo.mp4) e
+[docs/video-tornado.mp4](docs/video-tornado.mp4) mostram tudo em movimento.
 
 ## Configuração
 
@@ -237,7 +274,9 @@ src/client/java/br/climate/client/  Parte visual (só no cliente)
   CloudShapes, CloudRenderer      formas em voxel de cada tipo de nuvem e o desenho com texturas
   ClimateShowcase                comando /climavitrine
   ClimateMapScreen               tela do mapa-radar (tecla M)
-  TornadoRenderer                funil do tornado e partículas
+  TornadoRenderer                funil do tornado (ciclo de vida) e partículas
+  LightningFx                    raios e clarões dos cumulonimbos maduros
+  DevScript                      roteiro de teste para gravar demonstrações (-Dclimamod.script)
   mixin/                         chuva local, neve pela temperatura, neblina, oculta as nuvens vanilla
 src/test/java/br/climate/core/   Testes JUnit e as demonstrações Demo/Demo2
 tools/gerar_texturas_nuvens.py   gera o atlas de texturas das nuvens

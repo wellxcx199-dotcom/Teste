@@ -20,10 +20,12 @@ public final class ClimateClient implements ClientModInitializer {
         ClimateShowcase.register();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ClimateHud.tick();
-            if (client.level != null && !client.isPaused()) { ClientClimate.tick(); TornadoRenderer.tick(client); }
+            DevScript.tick(client);
+            if (client.level != null && !client.isPaused()) { ClientClimate.tick(); TornadoRenderer.tick(client); LightningFx.tick(client); }
         });
         WorldRenderEvents.AFTER_TRANSLUCENT.register(CloudRenderer::render);
         WorldRenderEvents.AFTER_TRANSLUCENT.register(TornadoRenderer::render);
+        WorldRenderEvents.AFTER_TRANSLUCENT.register(LightningFx::render);
         HudRenderCallback.EVENT.register(ClimateHud::render);
     }
 }
