@@ -49,8 +49,16 @@ public final class CloudRenderer {
             TILE_MAMMATUS = 8, TILE_SHELF = 9, TILE_PILEUS = 12;
     /** Quadros da animação da chuva (o mesmo desenho descendo 4 pixels por quadro). */
     private static final int[] RAIN_FRAMES = {TILE_RAIN, 13, 14, 15};
-    /** Altura (em blocos) coberta por uma repetição da textura nas laterais. */
-    private static final float TILE_BLOCKS = 4f;
+    /**
+     * Altura (em blocos) coberta por uma repetição da textura nas laterais: a largura de uma
+     * coluna, para os "pixels" da textura ficarem quadrados (4 blocos com células de 16, 12 com
+     * as de 48, que é o tamanho dos blocos das nuvens do próprio Minecraft).
+     */
+    private static float tileBlocks = 4f;
+    /** Profundidade das cortinas de chuva na última montagem (blocos). */
+    private static float rainDepth = CloudShapes.RAIN_DEPTH;
+    /** Raio do recorte na última montagem (blocos), para o alcance de visão. */
+    private static double builtRadius = 384;
     private static final float TU = 1 / 4f, TV = 1 / 4f;   // tamanho de um quadro no atlas (4x4 quadros)
     private static final CloudType[] TYPES = CloudType.values();
 
@@ -101,6 +109,7 @@ public final class CloudRenderer {
             builtCamX = cam.x; builtCamY = cam.y; builtCamZ = cam.z; builtOffX = offX; builtOffZ = offZ;
         }
         ClientClimate.setInsideCloud(builtInside);
+        FarView.update(builtRadius);
         if (solidEmpty && glassEmpty && rainCount == 0) return;
 
         PoseStack ps = ctx.matrixStack();
@@ -186,6 +195,10 @@ public final class CloudRenderer {
         builtInside = false;
 
         CloudShapes s = new CloudShapes(p);
+        tileBlocks = (float) s.colW;
+        rainDepth = CloudShapes.RAIN_DEPTH * s.S;
+        builtRadius = s.cols * s.colW / 2;
+        FarView.update(builtRadius);
         Vec3 tint = level.getCloudColor(pt);              // escurece à noite e com chuva, como o vanilla
         float[] fog = RenderSystem.getShaderFogColor();   // cor do horizonte, para as nuvens distantes
         double radius = s.cols * s.colW / 2;
@@ -321,13 +334,13 @@ public final class CloudRenderer {
         return out;
     }
 
-    /** Divide uma lateral em pedaços de TILE_BLOCKS de altura, cada um com a textura inteira. */
+    /** Divide uma lateral em pedaços de tileBlocks de altura, cada um com a textura inteira. */
     private static void sideSegments(BufferBuilder bb, CloudShapes s, int k, CloudType type, boolean storm, int forced,
                                      int dir, float lo, float hi, float y0, float y1,
                                      float X0, float X1, float Z0, float Z1, Look c, float shade, Vec3 cam) {
         float towerB = s.towerBase[k], towerT = s.towerTop[k];
-        for (float yt = hi; yt > lo + 0.01f; yt -= TILE_BLOCKS) {
-            float yb = Math.max(lo, yt - TILE_BLOCKS);
+        for (float yt = hi; yt > lo + 0.01f; yt -= tileBlocks) {
+            float yb = Math.max(lo, yt - tileBlocks);
             // Degradê vertical: a parte de baixo da nuvem é mais escura que o topo.
             float fT = 0.78f + 0.22f * (yt - y0) / Math.max(1, y1 - y0);
             float fB = 0.78f + 0.22f * (yb - y0) / Math.max(1, y1 - y0);
@@ -336,7 +349,7 @@ public final class CloudRenderer {
             else if (type == CloudType.NIMBOSTRATUS) tile = TILE_STORM_SIDE;
             else if (storm && towerT > towerB && (yt - towerB) / (towerT - towerB) < 0.45f) tile = TILE_STORM_SIDE;
             if (forced >= 0) tile = forced;
-            float vFrac = (yt - yb) / TILE_BLOCKS;             // o último pedaço pode ser menor que o quadro
+            float vFrac = (yt - yb) / tileBlocks;             // o último pedaço pode ser menor que o quadro
             float Yt = (float) (yt - cam.y), Yb = (float) (yb - cam.y);
             switch (dir) {
                 case 0 -> sideQuad(bb, tile, X1, Z0, X0, Z0, Yb, Yt, vFrac, c, shade * fB, shade * fT);
@@ -372,7 +385,8 @@ public final class CloudRenderer {
     }
 
     private static void vtx(BufferBuilder bb, float x, float y, float z, float u, float v, Look c, float shade) {
-        bb.addVertex(x, y, z).setUv(u, v).setColor(Math.min(1, c.r() * shade), Math.min(1, c.g() * shade),
+        float k = FarView.scale(x, y, z);
+        bb.addVertex(x * k, y * k, z * k).setUv(u, v).setColor(Math.min(1, c.r() * shade), Math.min(1, c.g() * shade),
                 Math.min(1, c.b() * shade), c.a());
     }
 
@@ -380,16 +394,21 @@ public final class CloudRenderer {
                                  float top, float c, float alpha, int tile) {
         float Xa = (float) (xa - cam.x), Za = (float) (za - cam.z), Xb = (float) (xb - cam.x), Zb = (float) (zb - cam.z);
         float u = u0(tile), v = v0(tile), cb = Math.min(1, c * 1.06f);
-        int segs = (int) (CloudShapes.RAIN_DEPTH / TILE_BLOCKS);
+        int segs = Math.max(1, Math.round(rainDepth / tileBlocks));
         for (int seg = 0; seg < segs; seg++) {
-            float yt = top - seg * TILE_BLOCKS, yb = yt - TILE_BLOCKS;
+            float yt = top - seg * tileBlocks, yb = yt - tileBlocks;
             float aT = alpha * (1 - seg / (float) segs), aB = alpha * (1 - (seg + 1) / (float) segs);
             float Yt = (float) (yt - cam.y), Yb = (float) (yb - cam.y);
-            bb.addVertex(Xa, Yt, Za).setUv(u, v).setColor(c, c, cb, aT);
-            bb.addVertex(Xa, Yb, Za).setUv(u, v + TV).setColor(c, c, cb, aB);
-            bb.addVertex(Xb, Yb, Zb).setUv(u + TU, v + TV).setColor(c, c, cb, aB);
-            bb.addVertex(Xb, Yt, Zb).setUv(u + TU, v).setColor(c, c, cb, aT);
+            rainVtx(bb, Xa, Yt, Za, u, v, c, cb, aT);
+            rainVtx(bb, Xa, Yb, Za, u, v + TV, c, cb, aB);
+            rainVtx(bb, Xb, Yb, Zb, u + TU, v + TV, c, cb, aB);
+            rainVtx(bb, Xb, Yt, Zb, u + TU, v, c, cb, aT);
         }
+    }
+
+    private static void rainVtx(BufferBuilder bb, float x, float y, float z, float u, float v, float c, float cb, float a) {
+        float k = FarView.scale(x, y, z);
+        bb.addVertex(x * k, y * k, z * k).setUv(u, v).setColor(c, c, cb, a);
     }
 
     /** Distância da câmera até uma caixa (0 se a câmera está dentro dela). */

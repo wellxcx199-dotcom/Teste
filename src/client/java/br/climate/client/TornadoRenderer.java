@@ -66,7 +66,11 @@ public final class TornadoRenderer {
     private static double gone(Life l, double now) { return Math.max(0, now - l.seen - 20); }
 
     /** Mesmo raio usado pelo servidor para os efeitos (StormEffects.funnelRadius). */
-    static double funnelRadius(int ef) { return 2.5 + 1.2 * ef; }
+    static double funnelRadius(int ef) { return 5 + 2.4 * ef; }
+    /** Escala do desenho do funil (anéis, cubos, ondulação) em relação ao funil original, de metade do raio. */
+    private static final float K = 2;
+    /** Até onde os tornados são desenhados (blocos). */
+    private static final double RANGE = 1000;
 
     /** Posição estimada agora: a do último pacote mais o deslocamento desde então. */
     static Vec3 position(StormInfo s, float pt) {
@@ -100,7 +104,7 @@ public final class TornadoRenderer {
             double g = gone(l, time);
             // Depois de sumir dos pacotes o tornado segue andando enquanto se desfaz.
             double x = l.x + l.info.vx() * g, z = l.z + l.info.vz() * g;
-            if (Math.hypot(x - cam.x, z - cam.z) > 400) continue;
+            if (Math.hypot(x - cam.x, z - cam.z) > RANGE) continue;
             float rope = g > 0 ? (float) Math.min(1, g / ROPE) : Math.max(0, (0.3f - l.info.intensity()) / 0.3f);
             float lift = (float) Math.max(0, Math.min(1, (g - ROPE) / LIFT));
             float fade = 1 - (float) Math.max(0, Math.min(1, (g - ROPE - LIFT) / FADE));
@@ -129,36 +133,37 @@ public final class TornadoRenderer {
         // Só o MOTION_BLOCKING (e o WORLD_SURFACE) chegam ao cliente; os outros mapas de altura vêm vazios.
         int ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING, (int) Math.floor(c.x), (int) Math.floor(c.z));
         // O funil vai do chão até a base da nuvem-parede da supercélula (ou ~50 blocos, sem ela).
-        float height = 44 + 5 * ef;
+        float height = (44 + 5 * ef) * K;
+        double near = 1.5 * ClientClimate.latest().cellBlocks();
         for (double[] w : CloudShapes.wallClouds)
-            if (Math.hypot(w[0] - c.x, w[1] - c.z) < 64) height = (float) Math.max(12, w[2] - ground + 2);
+            if (Math.hypot(w[0] - c.x, w[1] - c.z) < near) height = (float) Math.max(12 * K, w[2] - ground + 2 * K);
         // Na corda o funil afina muito (o vórtice se estica) e a parte de cima continua larga.
         double r0 = funnelRadius(ef) * 0.45 * (1 - 0.7 * rope), r1 = funnelRadius(ef) * 2.6 * (1 - 0.45 * rope);
         float fade = Math.min(1, s.intensity() * 3 + 0.35f) * life;
         // Parte visível: do topo até onde a condensação já desceu (ou até onde ela já subiu, no fim).
         float bottom = height * Math.max(1 - descend, lift);
-        for (float y = 0; y < height; y += 2.5f) {
+        for (float y = 0; y < height; y += 2.5f * K) {
             if (y < bottom) continue;
             float t = y / height;
             double radius = r0 + (r1 - r0) * Math.pow(t, 1.7);
             // A ponta que ainda desce é mais fina e meio transparente.
-            float tip = Math.min(1, (y - bottom) / 8f);
+            float tip = Math.min(1, (y - bottom) / (8f * K));
             radius *= 0.6 + 0.4 * tip;
             // "Corda": o funil se inclina e ondula com a altura; no fim se contorce em "S".
-            double ox = Math.sin(time * 0.013 + t * 2.8) * t * 4 * (1 + 2 * rope)
-                    + Math.sin(t * 7 + time * 0.03) * rope * 6 * (1 - t);
-            double oz = Math.cos(time * 0.011 + t * 2.2) * t * 3 * (1 + 2 * rope)
-                    + Math.cos(t * 6 + time * 0.025) * rope * 5 * (1 - t);
-            int n = 7 + (int) Math.round(radius * 1.6);
-            double spin = time * (0.22 - 0.1 * t) + y * 0.21;
-            float size = (float) (1.3 + 1.6 * t);
+            double ox = (Math.sin(time * 0.013 + t * 2.8) * t * 4 * (1 + 2 * rope)
+                    + Math.sin(t * 7 + time * 0.03) * rope * 6 * (1 - t)) * K;
+            double oz = (Math.cos(time * 0.011 + t * 2.2) * t * 3 * (1 + 2 * rope)
+                    + Math.cos(t * 6 + time * 0.025) * rope * 5 * (1 - t)) * K;
+            int n = 7 + (int) Math.round(radius * 1.6 / K);
+            double spin = time * (0.22 - 0.1 * t) + y * 0.21 / K;
+            float size = (float) (1.3 + 1.6 * t) * K;
             // Cor: poeira marrom embaixo, cinza-chumbo em cima.
             float r = lerp(0.55f, 0.60f, t), g = lerp(0.48f, 0.62f, t), b = lerp(0.40f, 0.66f, t);
             for (int q = 0; q < n; q++) {
                 double a = spin + q * Math.PI * 2 / n;
                 double jitter = 0.85 + 0.3 * Math.sin(q * 12.9898 + y * 78.233);
                 double x = c.x + ox + Math.cos(a) * radius * jitter, z = c.z + oz + Math.sin(a) * radius * jitter;
-                cube(bb, m, cam, x, ground + y + Math.sin(a * 3 + time * 0.1) * 0.6, z, size * (float) (1 - 0.4 * rope),
+                cube(bb, m, cam, x, ground + y + Math.sin(a * 3 + time * 0.1) * 0.6 * K, z, size * (float) (1 - 0.4 * rope),
                         (float) (r * tint.x), (float) (g * tint.y), (float) (b * tint.z), 0.82f * fade * (0.4f + 0.6f * tip),
                         TILE_FUNNEL);
             }
@@ -172,7 +177,7 @@ public final class TornadoRenderer {
         for (int q = 0; q < nd; q++) {
             double a = -time * 0.15 + q * Math.PI * 2 / nd;
             double x = c.x + Math.cos(a) * rd * (0.7 + 0.5 * Math.sin(q * 3.7)), z = c.z + Math.sin(a) * rd * (0.7 + 0.5 * Math.cos(q * 2.3));
-            cube(bb, m, cam, x, ground + 0.5 + Math.abs(Math.sin(q * 1.7 + time * 0.07)) * 3, z, 2.2f,
+            cube(bb, m, cam, x, ground + 0.5 + Math.abs(Math.sin(q * 1.7 + time * 0.07)) * 3 * K, z, 2.2f * K,
                     (float) (0.95 * tint.x), (float) (0.92 * tint.y), (float) (0.88 * tint.z), 0.6f * fade, TILE_DEBRIS);
         }
     }
@@ -195,10 +200,17 @@ public final class TornadoRenderer {
                              float x2, float y2, float z2, float x3, float y3, float z3, float r, float g, float b, float a,
                              int tile) {
         float u = (tile % 4) * TU, v = (tile / 4) * TV;
-        bb.addVertex(m, x0, y0, z0).setUv(u, v).setColor(r, g, b, a);
-        bb.addVertex(m, x1, y1, z1).setUv(u, v + TV).setColor(r, g, b, a);
-        bb.addVertex(m, x2, y2, z2).setUv(u + TU, v + TV).setColor(r, g, b, a);
-        bb.addVertex(m, x3, y3, z3).setUv(u + TU, v).setColor(r, g, b, a);
+        vtx(bb, m, x0, y0, z0, u, v, r, g, b, a);
+        vtx(bb, m, x1, y1, z1, u, v + TV, r, g, b, a);
+        vtx(bb, m, x2, y2, z2, u + TU, v + TV, r, g, b, a);
+        vtx(bb, m, x3, y3, z3, u + TU, v, r, g, b, a);
+    }
+
+    /** Vértice relativo à câmera; os distantes são puxados para dentro do alcance de visão (FarView). */
+    private static void vtx(BufferBuilder bb, Matrix4f m, float x, float y, float z, float u, float v,
+                            float r, float g, float b, float a) {
+        float k = FarView.scale(x, y, z);
+        bb.addVertex(m, x * k, y * k, z * k).setUv(u, v).setColor(r, g, b, a);
     }
 
     /** Poeira e fumaça subindo em espiral ao redor dos tornados próximos. */
@@ -212,10 +224,10 @@ public final class TornadoRenderer {
             Life l = lives.get(s.id());
             if (l == null || descend(l, now) < 0.35f) continue;   // ainda sem vento forte no chão
             Vec3 c = position(s, 0);
-            if (Math.hypot(c.x - mc.player.getX(), c.z - mc.player.getZ()) > 160) continue;
+            if (Math.hypot(c.x - mc.player.getX(), c.z - mc.player.getZ()) > 240) continue;
             int ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING, (int) Math.floor(c.x), (int) Math.floor(c.z));
             double r = funnelRadius(s.category());
-            for (int i = 0; i < 6 + s.category() * 2; i++) {
+            for (int i = 0; i < 10 + s.category() * 3; i++) {
                 double a = rnd.nextDouble() * Math.PI * 2, d = r * (0.8 + rnd.nextDouble() * 1.5);
                 double x = c.x + Math.cos(a) * d, z = c.z + Math.sin(a) * d;
                 double vx = -Math.sin(a) * 0.5 - Math.cos(a) * 0.1, vz = Math.cos(a) * 0.5 - Math.sin(a) * 0.1;

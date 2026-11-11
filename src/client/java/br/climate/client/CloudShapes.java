@@ -16,16 +16,21 @@ import java.util.List;
  * As formas dependem só das coordenadas do mundo (ruído determinístico), então a mesma
  * nuvem tem sempre a mesma cara e camadas de células vizinhas se emendam sem costura.
  *
- * Proporções: a espessura das nuvens chega do servidor comprimida a ~100 m por bloco, e a
- * largura das nuvens convectivas usa a mesma escala, para que a relação largura/altura seja
- * a de verdade. Um cúmulo de bom tempo (~1,3 km de largura, ~0,6 km de altura) fica com uns
- * 13×6 blocos; um congesto (~3,5 × 4,5 km), 35×45; a torre de um cumulonimbo (~6 a 12 km de
- * largura e 10 km de altura), 60 a 120 blocos de largura por 100 de altura; e a bigorna
- * (20 a 40 km), 200 a 400 blocos, esticada para onde o vento em altitude a leva.
+ * Proporções: a espessura das nuvens chega do servidor comprimida (~33 m por bloco com as
+ * células padrão de 48 blocos) e a largura das nuvens convectivas usa a mesma escala, para
+ * que a relação largura/altura seja a de verdade. Um cúmulo de bom tempo (~1,3 km de largura,
+ * ~0,6 km de altura) fica com uns 40×18 blocos; um congesto (~3,5 × 4,5 km), 105×135; a torre
+ * de um cumulonimbo (~6 a 12 km de largura e 10 km de altura), 180 a 360 blocos de largura por
+ * 300 de altura; e a bigorna (20 a 40 km), 600 a 1200 blocos, esticada para onde o vento em
+ * altitude a leva.
+ *
+ * Todas as medidas em blocos são multiplicadas por {@link #S}, a razão entre o tamanho da
+ * célula e 16 blocos (o tamanho para o qual as formas foram desenhadas). Assim, mudar
+ * physics.cellBlocks muda o tamanho das nuvens sem mudar a aparência delas.
  */
 final class CloudShapes {
     static final int COLS_PER_CELL = 4;
-    /** Profundidade das cortinas de chuva abaixo da base, em blocos. */
+    /** Profundidade das cortinas de chuva abaixo da base, em blocos (na escala de 16 blocos por célula). */
     static final int RAIN_DEPTH = 36;
 
     /** Material de um trecho: tipo de nuvem, e se é a bigorna do cumulonimbo. */
@@ -33,6 +38,8 @@ final class CloudShapes {
 
     final int cols;                  // colunas por lado do recorte
     final double colW;               // largura de uma coluna em blocos
+    /** Escala das medidas em blocos: 1 com células de 16 blocos, 3 com as de 48. */
+    final float S;
     final int originX, originZ;      // bloco do canto noroeste do recorte
     final float[] y0a, y1a, y0b, y1b;
     final byte[] matA, matB;          // matA: corpo; matB: bigorna (CUMULONIMBUS) ou vazio
@@ -47,6 +54,13 @@ final class CloudShapes {
     final List<Float> rainOp = new ArrayList<>();
     /** Estado da célula sendo desenhada (vem do CloudField). */
     private float curOp = 1, curAnvilOp = 1, curAnvil = 1, curBoil, curGrow = 1;
+    /** Torre alta sendo desenhada: surge e some por transparência, sem se rasgar em fiapos. */
+    private boolean curSolid;
+    /** Células com nuvem em camada (estratos, nimbostratos), para afinar as bordas das camadas. */
+    private final boolean[] layer;
+    private final int size;
+    private final List<StormInfo> stormList;
+    private final int cellBlocks;
     private int curAnvilTop, curFromX, curFromZ;
     private final double time;
     /** Colunas com cortina de chuva: índice da coluna e altura de onde a chuva sai. */
@@ -56,6 +70,7 @@ final class CloudShapes {
     CloudShapes(CloudInput p) {
         cols = p.size() * COLS_PER_CELL;
         colW = p.cellBlocks() / (double) COLS_PER_CELL;
+        S = p.cellBlocks() / 16f;
         originX = p.originX();
         originZ = p.originZ();
         int n = cols * cols;
@@ -67,6 +82,14 @@ final class CloudShapes {
         colX0 = (int) Math.floor(p.originX() / colW);
         colZ0 = (int) Math.floor(p.originZ() / colW);
         time = p.time();
+        size = p.size();
+        stormList = p.storms();
+        cellBlocks = p.cellBlocks();
+        layer = new boolean[size * size];
+        for (int q = 0; q < layer.length; q++) {
+            int ty = p.types()[q];
+            layer[q] = ty == CloudType.STRATUS.ordinal() || ty == CloudType.NIMBOSTRATUS.ordinal();
+        }
         java.util.Arrays.fill(matA, EMPTY);
         java.util.Arrays.fill(matB, EMPTY);
         CloudType[] types = CloudType.values();
@@ -102,11 +125,13 @@ final class CloudShapes {
                 if (t == CloudType.CUMULONIMBUS && base <= 0) {
                     // Célula sem nuvem ainda (supercélula recém-criada): base pelas vizinhas ou acima do jogador.
                     if (types[p.types()[idx]] == CloudType.CLEAR || base <= 0) base = neighbourBase(p, types, i, j);
-                    top = base + 90;
+                    top = base + Math.round(90 * S);
                 }
-                if (cbScale[idx] < 0) {                       // supercélula: base alta o bastante para o funil aparecer
-                    int minBase = Math.round(p.refY()) + 40;
-                    if (base < minBase) { top += minBase - base; base = minBase; }
+                if (cbScale[idx] < 0) {
+                    // Supercélula: base pela média das vizinhas, para a altura não saltar quando
+                    // a tempestade passa de uma célula a outra (cada célula tem a sua altitude).
+                    int nb = neighbourBase(p, types, i, j);
+                    top += nb - base; base = nb;
                 }
                 if (t == CloudType.CUMULONIMBUS && cbScale[idx] == 0) congestus(i, j, cellX0 + i, cellZ0 + j, base, top, cover);
                 else if (t == CloudType.CUMULONIMBUS)
@@ -184,7 +209,7 @@ final class CloudShapes {
                 CloudType t = types[p.types()[o]];
                 if (t != CloudType.CLEAR && t != CloudType.FOG && t != CloudType.CIRRUS && p.baseY()[o] > 0) { sum += p.baseY()[o]; n++; }
             }
-        return n > 0 ? sum / n : Math.round(p.refY()) + 45;
+        return n > 0 ? sum / n : Math.round(p.refY() + 45 * p.cellBlocks() / 16f);
     }
 
     private static long strength(CloudInput p, int idx) {
@@ -193,14 +218,14 @@ final class CloudShapes {
     }
 
     /** Raio (em colunas) de uma torre convectiva de altura h, com proporções reais. */
-    private double towerRadius(float h) { return (5 + 0.28 * h) / colW; }
+    private double towerRadius(float h) { return (5 * S + 0.28 * h) / colW; }
 
     /**
      * Deslocamento (colunas) do centro de uma célula que acabou de brotar: ela nasce colada no
      * flanco da vizinha que a disparou e vai se afastando para o próprio centro enquanto cresce.
      */
-    private double sproutX() { return curFromX * 2.2 * (1 - curGrow); }
-    private double sproutZ() { return curFromZ * 2.2 * (1 - curGrow); }
+    private double sproutX() { return curFromX * 0.55 * COLS_PER_CELL * (1 - curGrow); }
+    private double sproutZ() { return curFromZ * 0.55 * COLS_PER_CELL * (1 - curGrow); }
 
     /**
      * Domo convectivo: base reta e topo em couve-flor, com lados quase verticais nas torres
@@ -210,7 +235,8 @@ final class CloudShapes {
                       CloudType t, double amp) {
         int gx0 = i * COLS_PER_CELL, gz0 = j * COLS_PER_CELL;
         int reach = (int) Math.ceil(r + Math.max(Math.abs(pcx - 2), Math.abs(pcz - 2))) + 1;
-        double sides = Math.min(1, h / 40.0);             // 0: domo achatado; 1: torre de lados retos
+        curSolid = h > 24 * S;
+        double sides = Math.min(1, h / (40.0 * S));       // 0: domo achatado; 1: torre de lados retos
         for (int b = -reach; b < COLS_PER_CELL + reach; b++)
             for (int a = -reach; a < COLS_PER_CELL + reach; a++) {
                 int wx = cellX * COLS_PER_CELL + a, wz = cellZ * COLS_PER_CELL + b;
@@ -219,10 +245,11 @@ final class CloudShapes {
                 double prof = (1 - sides) * (1 - d * d) + sides * Math.sqrt(Math.max(0, 1 - Math.pow(d, 4)));
                 // Topo "fervendo" enquanto a nuvem cresce: bolhas que sobem e descem devagar.
                 double bubble = amp * (vnoise(wx / 1.4 + time * 0.007, wz / 1.4, 41) * 2 - 1);
-                float hh = Math.round(h * prof + bubble * Math.min(1, h / 12.0));
+                float hh = Math.round(h * prof + bubble * S * Math.min(1, h / (12.0 * S)));
                 if (hh < 2) continue;
-                setA(gx0 + a, gz0 + b, base + (d > 0.75 ? 1 : 0), base + hh, t);
+                setA(gx0 + a, gz0 + b, base + (d > 0.75 ? Math.round(S) : 0), base + hh, t);
             }
+        curSolid = false;
     }
 
     /**
@@ -231,11 +258,11 @@ final class CloudShapes {
      * disso fica em ~60% dela, mais baixa que a torre principal.
      */
     private void congestus(int i, int j, int cellX, int cellZ, int base, int top, float cover) {
-        float full = top - base, h = Math.min(full, Math.max(40, 0.6f * full));
+        float full = top - base, h = Math.min(full, Math.max(40 * S, 0.6f * full));
         double ccx = 2 + (rnd(cellX, cellZ, 70) - 0.5) + sproutX(), ccz = 2 + (rnd(cellX, cellZ, 71) - 0.5) + sproutZ();
         double r = towerRadius(h) * (0.8 + 0.25 * cover);
         dome(i, j, cellX, cellZ, ccx, ccz, r, h, base, CloudType.CUMULUS, 2 + 5 * curBoil);
-        pileus(i * COLS_PER_CELL, j * COLS_PER_CELL, ccx, ccz, r, base + h + 3 + 5 * curBoil);
+        pileus(i * COLS_PER_CELL, j * COLS_PER_CELL, ccx, ccz, r, base + h + (3 + 5 * curBoil) * S);
     }
 
     /**
@@ -247,17 +274,28 @@ final class CloudShapes {
     private void giantCumulonimbus(int i, int j, int cellX, int cellZ, int base, int top, float scale, boolean supercell) {
         CloudType t = CloudType.CUMULONIMBUS;
         int gx0 = i * COLS_PER_CELL, gz0 = j * COLS_PER_CELL;
-        float h = Math.max(20, top - base);
+        float h = Math.max(20 * S, top - base);
+        curSolid = true;
         // A bigorna só existe depois que a torre amadurece (curAnvil > 0) e fica no topo que a
         // torre alcançou, mesmo que ela depois desmorone (bigorna "órfã").
         boolean hasAnvil = curAnvil > 0.02f;
         float anvilTopY = hasAnvil ? Math.max(curAnvilTop, base + h) : base + h;
-        float anvil = Math.max(4, Math.round((anvilTopY - base) / 6f));
-        float towerH = hasAnvil ? Math.max(4, Math.min(h, anvilTopY - anvil - base)) : h;
+        float anvil = Math.max(4 * S, Math.round((anvilTopY - base) / 6f));
+        float towerH = hasAnvil ? Math.max(4 * S, Math.min(h, anvilTopY - anvil - base)) : h;
         double ccx = 2 + (rnd(cellX, cellZ, 50) - 0.5) + sproutX(), ccz = 2 + (rnd(cellX, cellZ, 51) - 0.5) + sproutZ();
+        if (supercell) {
+            // A torre fica exatamente sobre a supercélula e anda com ela, em vez de pular de
+            // célula em célula quando a tempestade cruza uma divisa.
+            for (StormInfo st : stormList) {
+                if (st.stormKind() != Storm.Kind.SUPERCELL) continue;
+                if (Math.floorDiv((int) Math.floor(st.x()), cellBlocks) != cellX || Math.floorDiv((int) Math.floor(st.z()), cellBlocks) != cellZ) continue;
+                ccx = (st.x() - (double) cellX * cellBlocks) / colW;
+                ccz = (st.z() - (double) cellZ * cellBlocks) / colW;
+            }
+        }
         // A escala do aglomerado entra aos poucos, para a torre não engordar de repente quando
         // o cúmulo que crescia ali vira cumulonimbo.
-        float grown = supercell ? 1 : Math.max(0, Math.min(1, (h - 40) / 50f));
+        float grown = supercell ? 1 : Math.max(0, Math.min(1, (h - 40 * S) / (50f * S)));
         double sc = 1 + (scale - 1) * grown;
         double rt = towerRadius(towerH) * sc, ra = 3.2 * towerRadius(h) * sc;
         int reachT = (int) Math.ceil(rt) + 1;
@@ -269,19 +307,20 @@ final class CloudShapes {
                 if (d >= 1 || gx < 0 || gz < 0 || gx >= cols || gz >= cols) continue;
                 // Lados quase verticais (a torre sobe como uma coluna até a bigorna), "ombros"
                 // arredondados só na borda e bolhas no topo.
-                double amp = 4 + 6 * curBoil;                       // bolhas maiores enquanto a torre cresce
+                double amp = (4 + 6 * curBoil) * S;                 // bolhas maiores enquanto a torre cresce
                 float y1 = base + Math.round(towerH * (float) Math.sqrt(Math.max(0, 1 - Math.pow(d, 4)))
                         + (float) (vnoise(wx / 1.6 + time * 0.006, wz / 1.6, 54) * 2 * amp - amp));
-                float y0 = base + (d > 0.8 ? 2 : 0);
-                if (supercell && d < 0.45) y0 = base - 7 + Math.round((float) (d / 0.45) * 3);   // nuvem-parede
+                float y0 = base + (d > 0.8 ? Math.round(2 * S) : 0);
+                if (supercell && d < 0.45) y0 = base - Math.round((7 - (float) (d / 0.45) * 3) * S);   // nuvem-parede
                 setA(gx, gz, y0, y1, t);
                 int k = index(gx, gz);
                 towerBase[k] = base; towerTop[k] = base + towerH;
                 if (d < (supercell ? 0.75 : 0.6) && (rnd(wx, wz, 55) < 0.6)) addRain(gx, gz, y0);
             }
-        if (supercell) walls.add(new double[] {originX + (gx0 + ccx) * colW, originZ + (gz0 + ccz) * colW, base - 7});
+        curSolid = false;
+        if (supercell) walls.add(new double[] {originX + (gx0 + ccx) * colW, originZ + (gz0 + ccz) * colW, base - Math.round(7 * S)});
         if (!hasAnvil) {
-            pileus(gx0, gz0, ccx, ccz, rt, base + towerH + 4 + 6 * curBoil);
+            pileus(gx0, gz0, ccx, ccz, rt, base + towerH + (4 + 6 * curBoil) * S);
             return;
         }
         float mature = curAnvil * curOp;
@@ -301,18 +340,18 @@ final class CloudShapes {
                 along /= along > 0 ? 1.5 : 0.75;
                 double d = Math.hypot(along, across) / (ra * (0.8 + 0.35 * vnoise(wx / 2.5, wz / 2.5, 53)));
                 if (d >= 1) continue;
-                float thick = Math.max(2, Math.round(anvil * (1 - 0.7f * (float) d)
-                        + (float) (vnoise(wx / 1.8, wz / 1.8, 56) * 3 - 1.5)));
-                float y1 = anvilTopY - (d > 0.85 ? 1 : 0) - Math.round(2 * (float) (d * d));
+                float thick = Math.max(2 * S, Math.round(anvil * (1 - 0.7f * (float) d)
+                        + (float) (vnoise(wx / 1.8, wz / 1.8, 56) * 3 - 1.5) * S));
+                float y1 = anvilTopY - Math.round(((d > 0.85 ? 1 : 0) + 2 * (float) (d * d)) * S);
                 float y0 = y1 - thick;
                 double dt = Math.hypot(a + 0.5 - ccx, b + 0.5 - ccz);
-                if (supercell && dt < rt * 0.3) y1 += Math.round(6 * (1 - dt / (rt * 0.3)));   // topo saliente
+                if (supercell && dt < rt * 0.3) y1 += Math.round(6 * S * (1 - dt / (rt * 0.3)));   // topo saliente
                 // Mammatus: bolsas de ar frio e úmido que afundam sob a bigorna madura, mais
                 // comuns na parte de baixo da bigorna que o vento levou para longe da torre.
                 float pouch = 0;
                 if (curAnvil > 0.6f && along > 0 && d > 0.3 && d < 0.92 && dt > rt * 1.1) {
                     float m = Math.min(1, (curAnvil - 0.6f) / 0.4f) * (float) (1 - Math.abs(d - 0.6) / 0.33);
-                    if (m > 0) pouch = Math.round(4 * m * mammatus(wx, wz));
+                    if (m > 0) pouch = Math.round(4 * S * m * mammatus(wx, wz));
                 }
                 setB(gx0 + a, gz0 + b, y0 - pouch, y1);
                 if (pouch > 0) markB(gx0 + a, gz0 + b, DECO_MAMMATUS);
@@ -335,10 +374,10 @@ final class CloudShapes {
                 double d = Math.hypot(a + 0.5 - (ccx - Math.floor(ccx)) , b + 0.5 - (ccz - Math.floor(ccz))) / r;
                 if (d >= 1) continue;
                 int gx = gx0 + (int) Math.floor(ccx) + a, gz = gz0 + (int) Math.floor(ccz) + b;
-                float y0 = capY - Math.round(3 * (float) (d * d));         // capuz curvado como um chapéu
+                float y0 = capY - Math.round(3 * S * (float) (d * d));     // capuz curvado como um chapéu
                 float save = curAnvilOp;
                 curAnvilOp = strength;
-                setB(gx, gz, y0, y0 + 2);
+                setB(gx, gz, y0, y0 + Math.round(2 * S));
                 curAnvilOp = save;
                 markB(gx, gz, DECO_PILEUS);
             }
@@ -363,8 +402,8 @@ final class CloudShapes {
                 if (dist > out) continue;
                 double t = (dist - inner) / (out - inner);              // 0 junto à torre, 1 na borda
                 // Cunha: topo liso descendo para a frente e base rasgada, mais baixa na borda.
-                float y1 = base + 2 - Math.round(5 * (float) t);
-                float y0 = base - Math.round((2 + 7 * (float) t) * (0.4f + 0.6f * edge) * (0.5f + 0.5f * m));
+                float y1 = base + Math.round((2 - 5 * (float) t) * S);
+                float y0 = base - Math.round((2 + 7 * (float) t) * (0.4f + 0.6f * edge) * (0.5f + 0.5f * m) * S);
                 if (y1 - y0 < 1) continue;
                 int gx = gx0 + a, gz = gz0 + b;
                 setA(gx, gz, y0, y1, CloudType.CUMULONIMBUS);
@@ -423,10 +462,13 @@ final class CloudShapes {
 
     private void setA(int gx, int gz, float y0, float y1, CloudType t) {
         if (gx < 0 || gz < 0 || gx >= cols || gz >= cols || y1 - y0 < 1) return;
-        float op = wisp(gx, gz, curOp, 81, wispFrac);
+        float op = curOp;
+        wispFrac[0] = 1;
+        if (!curSolid) op = wisp(gx, gz, curOp, 81, wispFrac);
         if (op < 0) return;
         if (wispFrac[0] < 1) {                                       // farrapo: um pedaço no meio da nuvem
-            float h = y1 - y0, hk = Math.max(1, Math.round(h * wispFrac[0] * wispFrac[0]));
+            // Achatado: no máximo uma coluna e meia de espessura, como os retalhos das nuvens do jogo.
+            float h = y1 - y0, hk = Math.max(1, Math.round(Math.min(h * wispFrac[0] * wispFrac[0], colW * (0.5 + wispFrac[0]))));
             y0 += Math.round((h - hk) * (float) rnd(colX0 + gx, colZ0 + gz, 83) * 0.8f);
             y1 = y0 + hk;
         }
@@ -463,7 +505,13 @@ final class CloudShapes {
                 double ccx = 2 + 1.2 * (rnd(cellX, cellZ, 10) - 0.5) + sproutX();
                 double ccz = 2 + 1.2 * (rnd(cellX, cellZ, 20) - 0.5) + sproutZ();
                 dome(i, j, cellX, cellZ, ccx, ccz, r0, h, base, t, 1.5 + 3 * curBoil);
-                if (h > 18) pileus(gx0, gz0, ccx, ccz, r0, base + h + 2 + 3 * curBoil);   // cúmulo virando congesto
+                if (cover > 0.9f && h > 30 * S) {                 // cúmulo carregado: pancada de chuva sob o centro
+                    for (int b = 1; b <= 2; b++)
+                        for (int a = 1; a <= 2; a++)
+                            if (rnd(cellX * COLS_PER_CELL + a, cellZ * COLS_PER_CELL + b, 43) < 0.7)
+                                addRain(gx0 + (int) Math.round(ccx) - 2 + a, gz0 + (int) Math.round(ccz) - 2 + b, base);
+                }
+                if (h > 18 * S) pileus(gx0, gz0, ccx, ccz, r0, base + h + (2 + 3 * curBoil) * S);   // cúmulo virando congesto
                 int puffs = (cover > 0.5f ? 1 : 0) + (cover > 0.8f ? 1 : 0);
                 for (int q = 1; q <= puffs; q++) {
                     double ang = 6.283 * rnd(cellX, cellZ, 30 + q), dist = r0 * (0.7 + 0.3 * rnd(cellX, cellZ, 35 + q));
@@ -478,8 +526,11 @@ final class CloudShapes {
                     for (int a = 0; a < COLS_PER_CELL; a++) {
                         int wx = cellX * COLS_PER_CELL + a, wz = cellZ * COLS_PER_CELL + b;
                         if (vnoise(wx / 2.5, wz / 2.5, 11) > 0.35 + 0.65 * cover) continue;
-                        float y0 = base + Math.round(vnoise(wx / 3.0, wz / 3.0, 12) * 2);
-                        setA(gx0 + a, gz0 + b, y0, y0 + Math.max(2, h) + Math.round(vnoise(wx / 2.0, wz / 2.0, 13) * 2), t);
+                        float edge = layerEdge(i, j, a, b);
+                        if (edge <= 0) continue;
+                        float y0 = base + Math.round(vnoise(wx / 3.0, wz / 3.0, 12) * 2 * S);
+                        float th = (Math.max(2, h) + Math.round(vnoise(wx / 2.0, wz / 2.0, 13) * 2 * S)) * edge;
+                        setA(gx0 + a, gz0 + b, y0, y0 + Math.max(2, Math.round(th)), t);
                     }
             }
             case NIMBOSTRATUS -> {
@@ -489,9 +540,11 @@ final class CloudShapes {
                         int wx = cellX * COLS_PER_CELL + a, wz = cellZ * COLS_PER_CELL + b;
                         if (vnoise(wx / 2.0, wz / 2.0, 21) > 0.45 + 0.45 * cover) continue;
                         double rag = vnoise(wx / 1.5, wz / 1.5, 22);
-                        float y0 = base - (rag > 0.62 ? 3 : rag > 0.45 ? 1 : 0);
+                        float y0 = base - Math.round((rag > 0.62 ? 3 : rag > 0.45 ? 1 : 0) * S);
                         // Topo encaroçado: o ar ainda sobe em bolhas dentro da camada.
-                        float y1 = top - 3 + Math.round(vnoise(wx / 1.6, wz / 1.6, 23) * 8);
+                        float edge = layerEdge(i, j, a, b);
+                        if (edge <= 0) continue;
+                        float y1 = y0 + Math.max(2, Math.round((top - y0 + (vnoise(wx / 1.6, wz / 1.6, 23) * 8 - 3) * S) * edge));
                         setA(gx0 + a, gz0 + b, y0, y1, t);
                         if (cover > 0.35f && vnoise(wx / 1.2, wz / 1.2, 24) > 0.58) addRain(gx0 + a, gz0 + b, y0);
                     }
@@ -501,17 +554,39 @@ final class CloudShapes {
                 // Duas faixas finas e altas, quase paralelas, cruzando a célula.
                 for (int s = 0; s < 2; s++) {
                     double off = 0.6 + 2.6 * rnd(cellX, cellZ, 60 + s), slope = (rnd(cellX, cellZ, 62) - 0.5) * 0.6;
-                    float y = base + Math.round(4 * rnd(cellX, cellZ, 64 + s));
+                    float y = base + Math.round(4 * S * rnd(cellX, cellZ, 64 + s));
                     for (int a = -3; a <= COLS_PER_CELL + 2; a++) {     // faixas longas, além da célula
                         int b = (int) Math.floor(off + slope * a);
                         if (b < 0 || b >= COLS_PER_CELL) continue;
-                        setA(gx0 + a, gz0 + b, y, y + 1, t);
-                        if (rnd(cellX * 8 + a, cellZ, 66 + s) < 0.6) setA(gx0 + a, gz0 + b + 1, y, y + 1, t);
+                        float thin = Math.max(1, Math.round(0.67f * S));
+                        setA(gx0 + a, gz0 + b, y, y + thin, t);
+                        if (rnd(cellX * 8 + a, cellZ, 66 + s) < 0.6) setA(gx0 + a, gz0 + b + 1, y, y + thin, t);
                     }
                 }
             }
             default -> {}
         }
+    }
+
+    /**
+     * Espessura relativa (0 a 1) de uma coluna de nuvem em camada: inteira no meio da camada e
+     * afinando até sumir nas bordas, onde a célula vizinha não tem camada. Sem isso cada célula
+     * de borda terminaria num paredão vertical, e uma célula sozinha pareceria um prédio.
+     */
+    private float layerEdge(int i, int j, int a, int b) {
+        double fx = i + (a + 0.5) / COLS_PER_CELL - 0.5, fz = j + (b + 0.5) / COLS_PER_CELL - 0.5;
+        int i0 = (int) Math.floor(fx), j0 = (int) Math.floor(fz);
+        double tx = fx - i0, tz = fz - j0;
+        double f = (isLayer(i0, j0) * (1 - tx) + isLayer(i0 + 1, j0) * tx) * (1 - tz)
+                + (isLayer(i0, j0 + 1) * (1 - tx) + isLayer(i0 + 1, j0 + 1) * tx) * tz;
+        double g = Math.max(0, Math.min(1, (f - 0.45) / 0.45));
+        return (float) (g * g * (3 - 2 * g));
+    }
+
+    /** 1 se a célula tem nuvem em camada; fora do recorte vale 1, para a camada não afinar na borda do que se vê. */
+    private int isLayer(int i, int j) {
+        if (i < 0 || j < 0 || i >= size || j >= size) return 1;
+        return layer[j * size + i] ? 1 : 0;
     }
 
     /** Número pseudoaleatório estável (0 a 1). */

@@ -27,11 +27,18 @@ public final class StormSystem {
     public final List<Storm> storms = new ArrayList<>();
     private int nextId = 1;
     private Random rnd;
+    /**
+     * Lado de uma célula da grade em metros. Os fenômenos precisam ser resolvidos pela grade:
+     * com células maiores, o olho do furacão e o núcleo da supercélula crescem na mesma
+     * proporção (com as células originais, de 8 km, nada muda).
+     */
+    double cellM = 8000;
 
     public StormSystem(long seed) { rnd = new Random(seed); }
 
     StormSystem copy(long seed) {
         StormSystem s = new StormSystem(seed);
+        s.cellM = cellM;
         for (Storm st : storms) s.storms.add(st.copy());
         s.nextId = nextId;
         return s;
@@ -51,7 +58,7 @@ public final class StormSystem {
     }
 
     public Storm spawnSupercell(double x, double z, double lifeH) {
-        Storm s = new Storm(nextId++, Storm.Kind.SUPERCELL, x, z, 25, 12000, lifeH);
+        Storm s = new Storm(nextId++, Storm.Kind.SUPERCELL, x, z, 25, Math.max(12000, 0.9 * cellM), lifeH);
         storms.add(s);
         return s;
     }
@@ -75,8 +82,9 @@ public final class StormSystem {
         return t;
     }
 
-    private static double hurricaneRmax(double vmax) {
-        return clamp(60000 - 600 * (vmax - 18), 18000, 60000);   // furacões fortes têm olho menor
+    private double hurricaneRmax(double vmax) {
+        // Furacões fortes têm olho menor. O fator mantém o olho com pelo menos ~2 células de raio.
+        return clamp(60000 - 600 * (vmax - 18), 18000, 60000) * Math.max(1, 0.8 * cellM / 8000);
     }
 
     /** Queda de pressão central (hPa) pelo perfil de Holland: Δp = ρ e V² / B. */
@@ -143,7 +151,7 @@ public final class StormSystem {
                         return;
                     } else if (x < 1.6) {                               // parede do olho
                         double ring = Math.exp(-Math.pow((x - 1.0) / 0.35, 2));
-                        cloud = (1.2 + strong) * ring; rain = (6 + 0.3 * s.vmax) * ring; conv = 0.5 * ring;
+                        cloud = (1.2 + strong) * ring; rain = (6 + 0.3 * s.vmax) * ring; conv = 0.7 * ring;
                     }
                     if (x >= 1.2) {                                     // bandas espirais
                         double theta = Math.atan2(dyN, dxE) * (hemi < 0 ? -1 : 1);
@@ -151,7 +159,7 @@ public final class StormSystem {
                         double band = clamp((arm - 0.35) / 0.65, 0, 1) * clamp(1.15 - x / 7, 0, 1);
                         cloud = Math.max(cloud, (0.7 + 0.6 * strong) * band);
                         rain = Math.max(rain, (2 + 6 * strong) * band);
-                        conv = Math.max(conv, 0.3 * band);
+                        conv = Math.max(conv, 0.5 * band);
                     }
                     saturateRain(g, k, cloud, rain, conv, dt);
                 });
@@ -159,7 +167,7 @@ public final class StormSystem {
                 double i = s.intensity();
                 forCells(g, s, 1.8 * s.radiusM, (k, rM, dxE, dyN) -> {
                     double w = Math.exp(-Math.pow(rM / s.radiusM, 2));
-                    saturateRain(g, k, (1.0 + i) * w, (3 + 12 * i) * w, 0.35 * w, dt);
+                    saturateRain(g, k, (1.0 + i) * w, (3 + 12 * i) * w, 0.6 * w, dt);
                 });
             }
         }

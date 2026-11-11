@@ -18,7 +18,7 @@ import org.slf4j.LoggerFactory;
  *
  * Cada linha do roteiro é "segundos ação", contando a partir da entrada no mundo:
  * "/comando" manda um comando ao servidor, "vitrine" liga ou desliga a /climavitrine,
- * "hud off" esconde a interface, "shot nome" salva um print em screenshots/nome.png,
+ * "hud off" esconde a interface, "rain off" esconde a chuva local, "shot nome" salva um print em screenshots/nome.png,
  * "mark nome" escreve uma marca no log (para cortar o vídeo), "wait clima" pausa o roteiro até
  * o servidor mandar o clima e "quit" fecha o jogo.
  */
@@ -61,6 +61,7 @@ final class DevScript {
         if (a.startsWith("/")) mc.player.connection.sendCommand(a.substring(1));
         else if (a.equals("vitrine")) ClimateShowcase.toggle(mc.player);
         else if (a.equals("hud off")) mc.options.hideGui = true;
+        else if (a.equals("rain off")) ClientClimate.muteRain = true;
         else if (a.startsWith("shot ")) Screenshot.grab(mc.gameDirectory, a.substring(5) + ".png", mc.getMainRenderTarget(), m -> {});
         else if (a.equals("quit")) mc.stop();
     }

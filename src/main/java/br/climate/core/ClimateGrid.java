@@ -28,12 +28,17 @@ public final class ClimateGrid {
     public final double[] wOro, wDiv, wTh, w, pTend, precipRate, precipTotal;
     /** Anomalia de temperatura suavizada (°C), que gera as baixas térmicas e as brisas. */
     public final double[] anom;
+    /**
+     * Sistemas de tempo que passam: 0 = crista (ar descendo, tempo firme), 0,5 = neutro,
+     * 1 = cavado (ar subindo, tempo instável). Diagnóstico, recalculado a cada passo.
+     */
+    public final double[] sys;
     public final CloudType[] type;
     /** Furacões, supercélulas e tornados em andamento. */
     public final StormSystem storms;
 
     private final double[] tmpA, tmpB;
-    private double curYr;
+    private double curYr, curHours;
 
     public ClimateGrid(int nx, int nz, int originCellX, int originCellZ,
                        ClimateConfig cfg, TerrainSource terrain) {
@@ -49,8 +54,10 @@ public final class ClimateGrid {
         wOro = new double[n]; wDiv = new double[n]; wTh = new double[n]; w = new double[n];
         pTend = new double[n]; precipRate = new double[n]; precipTotal = new double[n];
         anom = new double[n];
+        sys = new double[n];
         type = new CloudType[n];
         storms = new StormSystem(31L * originCellX + originCellZ);
+        storms.cellM = dx;
         tmpA = new double[n]; tmpB = new double[n];
 
         for (int j = 0; j < nz; j++)
@@ -67,13 +74,14 @@ public final class ClimateGrid {
     /** Cópia independente (para previsões): mesmo terreno e mesmo estado, matrizes próprias. */
     private ClimateGrid(ClimateGrid o) {
         nx = o.nx; nz = o.nz; originCellX = o.originCellX; originCellZ = o.originCellZ;
-        terrain = o.terrain; cfg = o.cfg; dx = o.dx; curYr = o.curYr;
+        terrain = o.terrain; cfg = o.cfg; dx = o.dx; curYr = o.curYr; curHours = o.curHours;
         elev = o.elev.clone(); wet = o.wet.clone(); cont = o.cont.clone(); water = o.water.clone();
         temp = o.temp.clone(); pSea = o.pSea.clone(); e = o.e.clone(); cloud = o.cloud.clone();
         u = o.u.clone(); v = o.v.clone();
         wOro = o.wOro.clone(); wDiv = o.wDiv.clone(); wTh = o.wTh.clone(); w = o.w.clone();
         pTend = o.pTend.clone(); precipRate = o.precipRate.clone(); precipTotal = o.precipTotal.clone();
         anom = o.anom.clone();
+        sys = o.sys.clone();
         storms = o.storms.copy(31L * o.originCellX + o.originCellZ + 7);
         type = o.type.clone();
         tmpA = new double[o.tmpA.length]; tmpB = new double[o.tmpB.length];
@@ -146,8 +154,9 @@ public final class ClimateGrid {
         }
         for (int k = 0; k < n; k++) {
             // Sem oceano na janela: assume continentalidade máxima.
-            double d = dist[k] == Integer.MAX_VALUE ? cfg.continentalityCells : dist[k];
-            cont[k] = clamp(d / cfg.continentalityCells, 0, 1);
+            double full = Math.max(1, cfg.continentalityBlocks / cfg.cellBlocks);   // em células
+            double d = dist[k] == Integer.MAX_VALUE ? full : dist[k];
+            cont[k] = clamp(d / full, 0, 1);
         }
     }
 
@@ -157,7 +166,7 @@ public final class ClimateGrid {
      * térmica como células de água, mas não tornam toda a região "marítima".
      */
     private boolean[] oceanMask() {
-        int n = nx * nz, r = cfg.oceanRadiusCells;
+        int n = nx * nz, r = (int) Math.max(1, Math.round(cfg.oceanRadiusBlocks / (double) cfg.cellBlocks));
         boolean[] ocean = new boolean[n];
         for (int j = 0; j < nz; j++)
             for (int i = 0; i < nx; i++) {
@@ -178,7 +187,7 @@ public final class ClimateGrid {
     /** Coloca a grade num estado de equilíbrio plausível antes de começar. */
     public void initialize(double gameHours) {
         double tod = timeOfDay(gameHours), yr = yearFraction(gameHours);
-        curYr = yr;
+        curYr = yr; curHours = gameHours;
         for (int j = 0; j < nz; j++)
             for (int i = 0; i < nx; i++) {
                 int k = j * nx + i;
@@ -241,7 +250,7 @@ public final class ClimateGrid {
             }
         computeContinentality();
         double tod = timeOfDay(gameHours), yr = yearFraction(gameHours);
-        curYr = yr;
+        curYr = yr; curHours = gameHours;
         for (int j = 0; j < nz; j++)
             for (int i = 0; i < nx; i++) {
                 int k = j * nx + i;
@@ -260,7 +269,7 @@ public final class ClimateGrid {
 
     public void step(double dtHours, double gameHours) {
         double tod = timeOfDay(gameHours), yr = yearFraction(gameHours);
-        curYr = yr;
+        curYr = yr; curHours = gameHours;
         updateTemperature(dtHours, tod, yr);
         advect(dtHours);
         storms.evolve(this, dtHours);      // move os fenômenos antes de aplicá-los à grade
@@ -312,15 +321,85 @@ public final class ClimateGrid {
 
     // ---------- Temperatura ----------
 
-    private double targetTemp(int k, int j, double tod, double yr) {
+    /** Temperatura média do dia (sem o ciclo dia/noite) para a célula, na latitude e estação. */
+    private double dailyMeanTemp(int k, int j, double yr) {
         double lat = latitudeDeg(j);
         double decl = 23.45 * Math.sin(2 * Math.PI * yr);              // declinação solar
         double seasonal = decl * (0.4 + 0.6 * cont[k]);                 // continente sente mais as estações
         double phi = Math.toRadians(lat - 0.6 * seasonal);
         double teq = 29.0 - 48.0 * Math.sin(phi) * Math.sin(phi);       // equilíbrio radiativo por latitude
-        double diurnalAmp = lerp(1.0, 9.0, cont[k]);                    // amplitude diária: mar pequena, interior grande
+        return teq - lapse(elev[k]);
+    }
+
+    private double targetTemp(int k, int j, double tod, double yr) {
+        // Amplitude diária: mínima sobre o mar, moderada no litoral, grande no interior.
+        double diurnalAmp = water[k] ? 1.0 : lerp(2.5, 9.0, cont[k]);
+        // Nuvem faz sombra de dia e segura o calor à noite: o céu encoberto achata o ciclo diário.
+        diurnalAmp *= 1 - cfg.cloudShading * clamp(cloud[k] / 0.6, 0, 1);
         double diurnal = diurnalAmp * Math.sin(2 * Math.PI * (tod - 0.30));
-        return teq + diurnal - lapse(elev[k]);
+        return dailyMeanTemp(k, j, yr) + diurnal;
+    }
+
+    // ---------- Ruído determinístico (sistemas de tempo e manchas de convecção) ----------
+
+    private static double hash(int x, int z, int t, int salt) {
+        long h = x * 0x9E3779B97F4A7C15L ^ z * 0xC2B2AE3D27D4EB4FL ^ t * 0xD6E8FEB86659FD93L ^ salt * 0x165667B19E3779F9L;
+        h ^= h >>> 33; h *= 0xFF51AFD7ED558CCDL; h ^= h >>> 33; h *= 0xC4CEB9FE1A85EC53L; h ^= h >>> 33;
+        return (h >>> 11) * 0x1.0p-53;
+    }
+
+    /** Ruído suave de 0 a 1 em (x, z, t): valores sorteados numa grade e interpolados. */
+    private static double noise3(double x, double z, double t, int salt) {
+        int x0 = (int) Math.floor(x), z0 = (int) Math.floor(z), t0 = (int) Math.floor(t);
+        double fx = x - x0, fz = z - z0, ft = t - t0;
+        fx = fx * fx * (3 - 2 * fx); fz = fz * fz * (3 - 2 * fz); ft = ft * ft * (3 - 2 * ft);
+        double a = lerp(lerp(hash(x0, z0, t0, salt), hash(x0 + 1, z0, t0, salt), fx),
+                        lerp(hash(x0, z0 + 1, t0, salt), hash(x0 + 1, z0 + 1, t0, salt), fx), fz);
+        double b = lerp(lerp(hash(x0, z0, t0 + 1, salt), hash(x0 + 1, z0, t0 + 1, salt), fx),
+                        lerp(hash(x0, z0 + 1, t0 + 1, salt), hash(x0 + 1, z0 + 1, t0 + 1, salt), fx), fz);
+        return lerp(a, b, ft);
+    }
+
+    /**
+     * Sistema de tempo (0 = crista, 1 = cavado) num ponto do mundo, em blocos. O vento do
+     * modelo é quase estacionário, então sem isto o ar subiria sempre nos mesmos lugares e
+     * algumas regiões ficariam nubladas para sempre. Na atmosfera real, ondas de grande escala
+     * (cristas e cavados) passam a cada poucos dias e alternam tempo firme e tempo instável.
+     * Aqui elas são um campo suave que anda para leste e muda devagar; como depende só da
+     * posição no mundo e da hora, é reproduzível e a previsão o enxerga.
+     */
+    public double weatherSystem(double worldBlockX, double worldBlockZ) {
+        return weatherSystem(worldBlockX, worldBlockZ, curHours);
+    }
+
+    private double weatherSystem(double worldBlockX, double worldBlockZ, double hours) {
+        if (cfg.systemStrength <= 0) return 0.5;
+        double mpb = cfg.metersPerBlockH();
+        double drift = cfg.systemSpeed * cfg.windSpeedFactor * 3600 * hours;      // metros percorridos
+        double n = noise3((worldBlockX * mpb - drift) / cfg.systemSizeM, worldBlockZ * mpb / cfg.systemSizeM,
+                hours / cfg.systemLifeH, 7);
+        return clamp(0.5 + (n - 0.5) * 2.4 * cfg.systemStrength, 0, 1);
+    }
+
+    /**
+     * Quanto da subida de ar de grande escala (encostas, convergência) vira nuvem agora: nada
+     * sob a crista, um quarto em tempo neutro, tudo e mais um pouco sob o cavado. O vento do modelo
+     * é quase estacionário; sem este fator choveria sem parar nas mesmas encostas e costas.
+     */
+    private double liftGate(int k) {
+        return cfg.systemStrength <= 0 ? 1 : clamp((sys[k] - 0.4) / 0.4, 0, 1.5);
+    }
+
+    /**
+     * Mancha de convecção (0 a 1,2): as térmicas não sobem em toda parte ao mesmo tempo. Uma
+     * célula favorecida agora deixa de ser em poucas horas, o que espalha os cúmulos em campos
+     * irregulares e faz as trovoadas nascerem em pontos e linhas, não numa região inteira.
+     */
+    private double convectivePatch(int k) {
+        double mpb = cfg.metersPerBlockH();
+        double n = noise3(cellCenterX(k) * mpb / cfg.patchSizeM, cellCenterZ(k) * mpb / cfg.patchSizeM,
+                curHours / cfg.patchLifeH, 11);
+        return clamp((n - 0.38) / 0.25, 0, 1.2);
     }
 
     private void updateTemperature(double dt, double tod, double yr) {
@@ -382,12 +461,14 @@ public final class ClimateGrid {
             double mean = refTemp(latitudeDeg(j));
             for (int i = 0; i < nx; i++) anom[j * nx + i] = t0[j * nx + i] - mean;
         }
-        for (int q = 0; q < cfg.anomalySmoothPasses; q++) smooth(anom);
+        int passes = (int) Math.max(1, Math.round(cfg.breezeSmoothBlocks / (double) cfg.cellBlocks));
+        for (int q = 0; q < passes; q++) smooth(anom);
         for (int j = 0; j < nz; j++) {
             double hadley = hadleyHPa(latitudeDeg(j));
             for (int i = 0; i < nx; i++) {
                 int k = j * nx + i;
-                pSea[k] = 1013.25 + hadley - cfg.thermalLowHPaPerC * anom[k];   // ar quente -> baixa pressão
+                pSea[k] = 1013.25 + hadley - cfg.thermalLowHPaPerC * anom[k]    // ar quente -> baixa pressão
+                        + (0.5 - weatherSystem(cellCenterX(k), cellCenterZ(k))) * 2 * cfg.systemHPa;  // crista alta, cavado baixo
             }
         }
         smooth(pSea); smooth(pSea);
@@ -494,11 +575,19 @@ public final class ClimateGrid {
                 wOro[k] = u[k] * dhdx + v[k] * dhdy;                 // vento subindo a encosta
                 double dudx = (u[j * nx + i1] - u[j * nx + i0]) / ((i1 - i0) * dx);
                 double dvdy = -(v[j1 * nx + i] - v[j0 * nx + i]) / ((j1 - j0) * dx);
-                wDiv[k] = -(dudx + dvdy) * 1500.0;                    // convergência -> ascensão
+                sys[k] = weatherSystem(cellCenterX(k), cellCenterZ(k));
+                // Convergência -> ascensão, mais a subida (cavado) ou descida (crista) de grande escala.
+                wDiv[k] = -(dudx + dvdy) * 1500.0 * liftGate(k) + (sys[k] - 0.5) * 2 * cfg.systemLift;
                 double rh = clamp(e[k] / satPressure(temp[k]), 0, 1);
-                // Instabilidade: superfície mais quente que o ar de referência daquela latitude/altitude.
-                double excess = temp[k] - (refTemp(latitudeDeg(j)) - lapse(elev[k])) - 1.0;
-                wTh[k] = clamp(excess / 8.0, 0, 1) * rh;               // convecção precisa de calor E umidade
+                // Instabilidade: a superfície precisa estar mais quente que a própria média do dia
+                // (o ar acima dela) para vencer a "tampa" de ar estável. Assim a convecção é da
+                // tarde, não do dia inteiro, e a crista (ar descendo) reforça a tampa.
+                double cap = cfg.convectiveCapC + 5 * clamp((0.5 - sys[k]) * 2, 0, 1);
+                double inst = clamp((temp[k] - dailyMeanTemp(k, j, curYr) - cap) / 5.0, 0, 1);
+                // Sobre mar quente não há aquecimento diurno, mas o cavado organiza a convecção
+                // (ondas de leste, aglomerados tropicais).
+                if (water[k]) inst = Math.max(inst, 0.7 * clamp((sys[k] - 0.6) / 0.4, 0, 1) * clamp((temp[k] - 24) / 4, 0, 1));
+                wTh[k] = inst * (0.4 + 0.6 * rh) * convectivePatch(k); // convecção precisa de calor E umidade
                 w[k] = clamp(wOro[k] + wDiv[k] + wTh[k], -2, 2);
             }
     }
@@ -515,20 +604,41 @@ public final class ClimateGrid {
                 double target = cfg.landEvapFraction * wet[k] * es;
                 if (e[k] < target) e[k] += (target - e[k]) * (1 - Math.exp(-dt / 24.0));
             }
+            // Crista: o ar que desce da troposfera é seco e vai secando a camada de baixo.
+            double sink = clamp((0.5 - sys[k]) * 2, 0, 1);
+            if (sink > 0 && e[k] > cfg.ridgeDryRh * es) e[k] += (cfg.ridgeDryRh * es - e[k]) * (1 - Math.exp(-dt * sink / cfg.ridgeDryTauH));
             e[k] = Math.max(e[k], 0);
 
-            // Condensação por ascensão: resfria a 9,8 °C/km e a pressão cai (vapor dilui).
-            double dz = clamp((wOro[k] + wDiv[k]) * cfg.liftSeconds + wTh[k] * cfg.convLiftSeconds, -1500, 3000);
+            // 1) Ascensão de grande escala (encostas, convergência, cavado): o ar resfria a
+            //    9,8 °C/km, a pressão cai (o vapor dilui) e o que passa da saturação condensa.
+            double oro = wOro[k] > 0 ? wOro[k] * liftGate(k) : wOro[k];   // a descida a sotavento seca sempre
+            double dz = clamp((oro + wDiv[k]) * cfg.liftSeconds, -1500, 3000);
             double eL = e[k] * Math.exp(-dz / SCALE_HEIGHT);
-            double tL = temp[k] - LAPSE_DRY * dz / 1000.0;
-            double esL = satPressure(tL);
+            double esL = satPressure(temp[k] - LAPSE_DRY * dz / 1000.0);
             if (eL > esL) {
                 double exc = (eL - esL) * kc;
                 e[k] -= exc; cloud[k] += exc;
-            } else {
-                double ev = Math.min(cloud[k], (esL - eL) * 0.5 * kc);   // subsidência seca a nuvem
-                cloud[k] -= ev; e[k] += ev;
             }
+            // 2) Convecção: as térmicas sobem até uma altura proporcional à instabilidade e só
+            //    condensam o que passa do nível de condensação. A quantidade de ar que elas
+            //    processam cresce com o quadrado da força: convecção fraca dá cúmulos de bom
+            //    tempo, que não chovem; só a forte acumula água para virar cumulonimbo.
+            if (wTh[k] > 0) {
+                double dzc = Math.min(3000, wTh[k] * cfg.convLiftSeconds);
+                double ec = e[k] * Math.exp(-dzc / SCALE_HEIGHT);
+                double esc = satPressure(temp[k] - LAPSE_DRY * dzc / 1000.0);
+                if (ec > esc) {
+                    double exc = Math.min(0.5 * e[k], (ec - esc) * kc * wTh[k] * wTh[k]);
+                    e[k] -= exc; cloud[k] += exc;
+                }
+            }
+            // 3) Mistura com o ar em volta: a nuvem evapora pelas bordas, tanto mais depressa
+            //    quanto mais seco o ar e quanto mais ele desce. É o que desfaz os cúmulos quando
+            //    a térmica para e limpa o céu sob as cristas.
+            double rhNow = Math.min(1, e[k] / es);
+            double life = lerp(cfg.cloudLifeDryH, cfg.cloudLifeMoistH, rhNow * rhNow) / (1 + 3 * clamp(-dz / 400, 0, 1));
+            double mix = cloud[k] * (1 - Math.exp(-dt / life));
+            cloud[k] -= mix; e[k] += mix;
             // Saturação direta no solo (neblina de radiação/advecção): o excesso condensa
             // todo de uma vez, senão a umidade relativa ficaria acima de 100%.
             if (e[k] > es) {
@@ -536,18 +646,42 @@ public final class ClimateGrid {
                 e[k] -= exc; cloud[k] += exc;
             }
             // Precipitação
-            double pr = Math.max(0, cloud[k] - cfg.precipThreshold) * (1 - Math.exp(-dt / 2.0));
+            // A chuva convectiva cai depressa (pancadas); a de camada, devagar e por mais tempo.
+            double pr = Math.max(0, cloud[k] - cfg.precipThreshold) * (1 - Math.exp(-dt / (wTh[k] > 0.25 ? 0.5 : 2.0)));
             cloud[k] -= pr;
             precipRate[k] = pr * cfg.mmPerUnit / dt;
             precipTotal[k] += pr * cfg.mmPerUnit;
-            cloud[k] *= Math.exp(-dt / 48.0); // dissipação lenta
+            // A chuva esfria o chão (evaporação e ar frio que desce com ela): é o que encerra a
+            // trovoada depois de uma ou duas horas e deixa a tarde seguinte mais calma.
+            if (!water[k] && pr > 0) {
+                temp[k] -= Math.min(1.5, cfg.rainCoolingCPerMm * pr * cfg.mmPerUnit);
+                double esCool = satPressure(temp[k]);                 // ar mais frio segura menos vapor
+                if (e[k] > esCool) { cloud[k] += e[k] - esCool; e[k] = esCool; }
+            }
         }
     }
 
     // ---------- Classificação de nuvens ----------
 
     private void classify() {
-        for (int k = 0; k < nx * nz; k++) type[k] = classifyCell(k);
+        int n = nx * nz;
+        for (int k = 0; k < n; k++) type[k] = classifyCell(k);
+        // Nimbostrato é uma camada extensa. Uma célula chuvosa sozinha, sem camada em volta, é
+        // na verdade uma pancada isolada: vira um cúmulo carregado (congesto).
+        boolean[] lone = new boolean[n];
+        for (int j = 0; j < nz; j++)
+            for (int i = 0; i < nx; i++) {
+                int k = j * nx + i;
+                if (type[k] != CloudType.NIMBOSTRATUS) continue;
+                int layer = 0;
+                for (int b = Math.max(0, j - 1); b <= Math.min(nz - 1, j + 1); b++)
+                    for (int a = Math.max(0, i - 1); a <= Math.min(nx - 1, i + 1); a++) {
+                        CloudType t = type[b * nx + a];
+                        if ((a != i || b != j) && (t == CloudType.NIMBOSTRATUS || t == CloudType.STRATUS)) layer++;
+                    }
+                lone[k] = layer < 3;
+            }
+        for (int k = 0; k < n; k++) if (lone[k]) type[k] = CloudType.CUMULUS;
     }
 
     private CloudType classifyCell(int k) {
@@ -557,11 +691,13 @@ public final class ClimateGrid {
         if (base < 60 && spd < 3 && (rh > 0.97 || c > 0.05)) return CloudType.FOG;
         // Convecção profunda: corrente ascendente com muita água condensada. Nos trópicos o
         // combustível é sobretudo a umidade, então não se exige um grande excesso de calor.
-        if (c > 0.4 && wTh[k] > 0.12 && t > 15) return CloudType.CUMULONIMBUS;
-        if (c > 0.05 && wTh[k] > 0.1) return CloudType.CUMULUS;              // convecção rasa
+        if (c > 0.5 && wTh[k] > 0.25 && t > 15) return CloudType.CUMULONIMBUS;
+        if (c > 0.03 && wTh[k] > 0.06) return CloudType.CUMULUS;             // convecção rasa
         if (c > 0.6) return CloudType.NIMBOSTRATUS;                            // ascensão lenta e ampla
         if (c > 0.08) return CloudType.STRATUS;
-        if (pTend[k] < -0.25 && rh > 0.45) return CloudType.CIRRUS; // queda de pressão: sistema se aproxima
+        // Cirros: a umidade em altitude chega horas antes do cavado (o sistema se aproxima).
+        double x = cellCenterX(k), z = cellCenterZ(k);
+        if (sys[k] > 0.3 && sys[k] < 0.7 && weatherSystem(x, z, curHours + 5) - sys[k] > 0.06) return CloudType.CIRRUS;
         return CloudType.CLEAR;
     }
 
@@ -619,9 +755,10 @@ public final class ClimateGrid {
         double base = switch (t) {
             case FOG -> 0;
             case CIRRUS -> 8000;
-            case STRATUS -> clamp(lcl, 150, 1500);
-            case NIMBOSTRATUS -> clamp(lcl, 300, 2000);
-            default -> clamp(lcl, 400, 2500);                             // cúmulos e cumulonimbos
+            case STRATUS -> clamp(lcl, 250, 1500);
+            case NIMBOSTRATUS -> clamp(lcl, 400, 2000);
+            case CUMULONIMBUS -> clamp(lcl, 1200, 2500);                  // base alta: a torre aparece acima do relevo
+            default -> clamp(lcl, 600, 2500);                             // cúmulos
         };
         return elev[k] + base;
     }
@@ -635,7 +772,7 @@ public final class ClimateGrid {
             case FOG -> elev[k] + 80;
             case CIRRUS -> base + 400;
             case STRATUS -> base + 300 + 400 * c;
-            case NIMBOSTRATUS -> base + 2500 + 1500 * c;
+            case NIMBOSTRATUS -> base + 1200 + 800 * c;
             case CUMULUS -> base + 600 + 1800 * c;
             case CUMULONIMBUS -> Math.max(base + 6000, 11000);           // topo na tropopausa
             default -> base;
@@ -659,6 +796,7 @@ public final class ClimateGrid {
     /** Recalcula o que é derivado do estado (movimento vertical, tipo de nuvem) após uma restauração. */
     public void refreshDiagnostics(double gameHours) {
         curYr = yearFraction(gameHours);
+        curHours = gameHours;
         java.util.Arrays.fill(pTend, 0);
         java.util.Arrays.fill(precipRate, 0);
         computeVertical();

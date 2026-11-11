@@ -36,8 +36,11 @@ import java.util.Map;
 final class CloudField {
     private CloudField() {}
 
-    /** Velocidade de crescimento vertical das nuvens convectivas e de desmoronamento (blocos/tick). */
-    private static final float GROW = 0.06f, COLLAPSE = 0.03f;
+    /**
+     * Velocidade de crescimento vertical das nuvens convectivas e de desmoronamento, em blocos
+     * por tick na escala de 16 blocos por célula; como as alturas, é multiplicada por {@link #scale}.
+     */
+    private static final float GROW = 0.045f, COLLAPSE = 0.025f;
     /** Ticks para surgir (opacidade 0→1) por família e para se desfazer: camadas se condensam devagar. */
     private static final float FADE_CONVECTIVE = 160, FADE_LAYER = 400, FADE_CIRRUS = 300, FADE_OUT = 200;
     /** Ticks para a bigorna se espalhar e para sumir depois que a torre morre. */
@@ -45,8 +48,10 @@ final class CloudField {
     /** Ticks em que o deslocamento antigo é "devolvido" após um pacote novo. */
     private static final float CARRY = 160;
 
-    /** Altura (blocos) que a torre vizinha precisa ter para disparar uma célula nova; menor a sotavento. */
+    /** Altura (blocos, vezes a escala) que a torre vizinha precisa ter para disparar uma célula nova; menor a sotavento. */
     private static final float SPARK = 13, SPARK_DOWNWIND = 8;
+    /** Escala das medidas em blocos: célula do alvo atual / 16 (ver CloudShapes.S). */
+    private static float scale = 1;
 
     private static final class Cell {
         int cx, cz;
@@ -117,6 +122,7 @@ final class CloudField {
             if (moved > p.size() / 3) { instant = true; carryX = carryZ = 0; }
         }
         target = p;
+        scale = p.cellBlocks() / 16f;
         sinceTarget = 0;
         int cx0 = Math.floorDiv(p.originX(), p.cellBlocks()), cz0 = Math.floorDiv(p.originZ(), p.cellBlocks());
         CloudType[] types = CloudType.values();
@@ -263,7 +269,7 @@ final class CloudField {
                 if (o == null || family(o.shown) != Family.CONVECTIVE || o.opacity < 0.4f) continue;
                 // A frente de rajada avança com o vento: a sotavento a célula nasce mais cedo.
                 boolean downwind = -dx * target.driftX() - dz * target.driftZ() > 0;
-                if (o.height >= (downwind ? SPARK_DOWNWIND : SPARK) && (best == null || o.height > best.height)) best = o;
+                if (o.height >= (downwind ? SPARK_DOWNWIND : SPARK) * scale && (best == null || o.height > best.height)) best = o;
             }
         return best;
     }
@@ -291,7 +297,7 @@ final class CloudField {
             // desaba antes e a bigorna, já sem alimentação, fica flutuando e se desfaz devagar.
             boolean orphan = have == Family.CONVECTIVE && c.anvil > 0.2f;
             c.opacity = Math.max(0, c.opacity - 1 / (orphan ? FADE_OUT * 3 : FADE_OUT));
-            if (have == Family.CONVECTIVE) c.height = Math.max(1, c.height - 2 * COLLAPSE);
+            if (have == Family.CONVECTIVE) c.height = Math.max(1, c.height - 2 * COLLAPSE * scale);
             c.anvil = Math.max(0, c.anvil - 1 / ANVIL_IN);
             c.boil = approach(c.boil, 0, 0.01f);
         } else if (have != want) {
@@ -307,7 +313,7 @@ final class CloudField {
             c.opacity = 0;
             c.cover = c.targetCover;
             c.base = c.targetBase;
-            c.height = want == Family.CONVECTIVE ? 3 : Math.max(1, c.targetHeight * 0.5f);
+            c.height = want == Family.CONVECTIVE ? 3 * scale : Math.max(1, c.targetHeight * 0.5f);
             c.anvil = 0;
             c.anvilTop = c.base + c.height;
             c.born = time;
@@ -340,8 +346,8 @@ final class CloudField {
         boolean wantCb = c.target == CloudType.CUMULONIMBUS;
         float goal = c.targetHeight;
         boolean growing = c.height < goal - 0.5f;
-        if (growing) c.height = Math.min(goal, c.height + GROW);
-        else if (c.height > goal) c.height = Math.max(goal, c.height - COLLAPSE);
+        if (growing) c.height = Math.min(goal, c.height + GROW * scale);
+        else if (c.height > goal) c.height = Math.max(goal, c.height - COLLAPSE * scale);
         c.boil = approach(c.boil, growing ? 1 : 0.25f, 0.01f);
 
         if (wantCb && c.height >= 0.85f * goal) {
@@ -351,10 +357,10 @@ final class CloudField {
         } else if (!wantCb) {
             c.anvil = Math.max(0, c.anvil - 1 / ANVIL_OUT);         // bigorna órfã some devagar
         }
-        if (c.anvilTop < c.base + 4) c.anvilTop = c.base + c.height;
+        if (c.anvilTop < c.base + 4 * scale) c.anvilTop = c.base + c.height;
         // O que se vê: cúmulo enquanto a torre é baixa; cumulonimbo quando ela fica alta
         // ou enquanto ainda resta bigorna.
-        boolean tall = c.height >= 40;
+        boolean tall = c.height >= 40 * scale;
         c.shown = (wantCb && tall) || c.anvil > 0.05f ? CloudType.CUMULONIMBUS : CloudType.CUMULUS;
     }
 

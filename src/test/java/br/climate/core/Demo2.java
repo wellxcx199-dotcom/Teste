@@ -11,7 +11,7 @@ public final class Demo2 {
     };
 
     public static void main(String[] a) {
-        ClimateConfig cfg = new ClimateConfig();
+        ClimateConfig cfg = TestConfig.cells16();
         // 20° N: z = -4444 blocos => célula -278. Janela vai de -278-20 a +20
         ClimateGrid g = new ClimateGrid(110, 40, 0, -298, cfg, T);
         double h = 6 * 24; // início do verão boreal (declinação máxima)

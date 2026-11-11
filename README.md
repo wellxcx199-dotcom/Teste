@@ -102,14 +102,16 @@ e topo saliente furando a bigorna.
 **Tornados** nascem de supercélulas maduras com base de nuvem baixa (ar úmido junto ao
 chão). O funil vai do chão até a nuvem-parede, gira, levanta poeira, puxa e arremessa
 entidades e arranca folhas, plantas e neve. A categoria (EF0 a EF5) segue a distribuição
-real: a maioria é fraca. O painel avisa o fenômeno mais próximo.
+real: a maioria é fraca. O painel avisa o fenômeno mais próximo. O funil tem de 5 (EF0) a
+17 blocos (EF5) de raio junto ao chão e alarga para cima; num furacão, o anel de vento máximo
+fica de 90 a 290 blocos do centro e as bandas de chuva chegam a mais de mil blocos.
 
 ![Tornado sob uma supercélula](docs/tornado.jpg)
 
 ## Nuvens: formas e texturas
 
 As nuvens são desenhadas no estilo das nuvens do Minecraft, mas com uma forma para cada
-tipo. Cada célula de 16 blocos vira 4×4 colunas de 4 blocos: cúmulos em domo de base reta,
+tipo. Cada célula de 48 blocos vira 4×4 colunas de 12 blocos: cúmulos em domo de base reta,
 estratos em camada fina com bordas irregulares, nimbostratos grossos e escuros com cortinas
 de chuva, cumulonimbos com torre e bigorna, e cirros em faixas finas e altas.
 
@@ -161,17 +163,40 @@ de as nuvens da vitrine começarem a nascer).
 
 ![Evolução de um cumulonimbo](docs/etapas-cumulonimbo.jpg)
 
-### Proporções reais
+### Proporções e escala
 
-A espessura das nuvens vem do servidor comprimida a 100 m por bloco, e a largura das nuvens
-convectivas agora usa a mesma escala, de modo que a relação entre largura e altura é a real.
-Um cúmulo de bom tempo tem uns 13×6 blocos (1,3 × 0,6 km); um congesto, 35×45; a torre de um
-cumulonimbo, de 55 a 110 blocos de largura por ~90 de altura, com lados quase verticais até a
-bigorna; e a bigorna, de 200 a 400 blocos, grossa junto à torre, fina nas bordas e esticada
-para onde sopra o vento em altitude. As torres alargam conforme crescem, então o cúmulo vira
-congesto e depois cumulonimbo sem saltos de tamanho.
+A espessura das nuvens vem do servidor comprimida a 33 m por bloco, e a largura das nuvens
+convectivas usa a mesma escala, de modo que a relação entre largura e altura é a real. Um
+cúmulo de bom tempo tem uns 40×18 blocos (1,3 × 0,6 km); um congesto, 105×135; a torre de um
+cumulonimbo, de 180 a 360 blocos de largura por ~300 de altura, com lados quase verticais até
+a bigorna; e a bigorna, de 600 a 1.200 blocos, grossa junto à torre, fina nas bordas e
+esticada para onde sopra o vento em altitude. As torres alargam conforme crescem, então o
+cúmulo vira congesto e depois cumulonimbo sem saltos de tamanho.
 
-![Proporções do cumulonimbo, antes e agora](docs/cumulonimbo-proporcoes.jpg)
+Cada célula do modelo (48 blocos) abriga uma nuvem, e cada célula vira 4×4 colunas de 12
+blocos, o mesmo tamanho dos "pixels" das nuvens do próprio Minecraft. Até a versão 0.8 a
+célula tinha 16 blocos: as nuvens tinham um terço do tamanho e ficavam três vezes mais perto
+umas das outras. Para voltar à escala antiga, use `physics.cellBlocks = 16`,
+`mod.cloudRadiusCells = 24` e `mod.cloudThicknessMetersPerBlock = 100`.
+
+As nuvens são enviadas até 960 blocos do jogador. O Minecraft corta o que passa de 4 vezes a
+distância de renderização (768 blocos com 12 chunks); para as nuvens distantes aparecerem
+com qualquer distância de renderização, os vértices além da metade desse alcance são
+aproximados ao longo da linha de visada: a posição na tela não muda, só a profundidade.
+
+![Escala das nuvens](docs/escala-nuvens.jpg)
+
+### O céu abre e fecha
+
+As nuvens não ficam para sempre. Num dia comum o céu amanhece limpo ou com poucos cúmulos,
+eles crescem à tarde sobre a terra, alguns viram pancadas, e à noite quase tudo se desfaz.
+De dois em dois dias, mais ou menos, passa um cavado com tempo instável e depois uma crista
+com céu firme. No modelo, o céu fica limpo de 55% a 70% do tempo conforme a latitude e chove
+de 1% a 10% do tempo.
+
+![Um dia de tempo real](docs/dia-de-tempo.jpg)
+
+O vídeo [docs/video-dois-dias.mp4](docs/video-dois-dias.mp4) mostra dois dias seguidos acelerados.
 
 A animação completa está em [docs/evolucao_cumulonimbo.gif](docs/evolucao_cumulonimbo.gif)
 (rode `/climavitrine` para ver a sequência no jogo).
@@ -213,7 +238,12 @@ anotados no log. Principais opções:
 
 | Opção | Padrão | Efeito |
 |---|---|---|
-| `mod.gridCells` | 96 | Células por lado da área simulada (96 × 16 blocos ≈ 1.500 blocos) |
+| `mod.gridCells` | 96 | Células por lado da área simulada (96 × 48 blocos ≈ 4.600 blocos) |
+| `physics.cellBlocks` | 48 | Lado da célula em blocos; define o tamanho e o espaçamento das nuvens |
+| `mod.cloudRadiusCells` | 20 | Raio, em células, das nuvens enviadas a cada jogador (960 blocos) |
+| `mod.cloudThicknessMetersPerBlock` | 33 | Escala vertical das nuvens (1600 / cellBlocks mantém as proporções) |
+| `physics.systemStrength` | 1,0 | Intensidade dos sistemas de tempo que passam (0 desliga) |
+| `physics.systemSizeM` / `systemSpeed` | 300000 / 12 | Tamanho (m) e velocidade (m/s) das cristas e cavados |
 | `mod.stepTicks` | 200 | Ticks entre passos da simulação (200 = 10 s) |
 | `mod.syncVanillaWeather` | true | Chuva/trovoada do jogo seguem o modelo |
 | `mod.snowFromModel` | true | Neve e gelo pela temperatura simulada |
@@ -227,13 +257,14 @@ anotados no log. Principais opções:
 | `physics.frictionLand` / `frictionSea` | 8e-5 / 4e-5 | Atrito do vento com o solo e com o mar |
 | `physics.maxBreeze` | 10 | Velocidade máxima das brisas (m/s) |
 
-Mudar `gridCells` ou `cellBlocks` descarta o estado salvo e recomeça do equilíbrio.
+Mudar `gridCells` ou `cellBlocks` descarta o estado salvo e recomeça do equilíbrio. Arquivos
+de configuração de antes da versão 0.9 são atualizados sozinhos para a nova escala (uma vez).
 
 ## Como o modelo funciona (resumo)
 
 O mundo é um planeta em escala: Z = 0 é o equador e Z = −20.000 o polo norte. Um bloco
 vale 500 m na horizontal e 15 m na vertical, e o ano tem 24 dias de jogo. Cada célula
-de 8 km guarda temperatura, pressão, vapor, água de nuvem e vento, e a cada passo:
+de 24 km guarda temperatura, pressão, vapor, água de nuvem e vento, e a cada passo:
 
 - a temperatura relaxa para o equilíbrio da latitude, da estação, da hora e da altitude,
   mais devagar sobre o mar (inércia térmica);
@@ -243,6 +274,13 @@ de 8 km guarda temperatura, pressão, vapor, água de nuvem e vento, e a cada pa
   gravidade com velocidade 0,6·√(g·h·ΔT/T): brisa marítima de dia, terral à noite);
 - o ar sobe por encostas, convergência ou convecção, esfria e condensa (fórmula de
   Magnus); a nuvem densa vira chuva;
+- **as nuvens vão e vêm**: a convecção só começa quando o chão passa a média do dia (é da
+  tarde, não da madrugada) e nasce em manchas, não numa região inteira; convecção fraca dá
+  cúmulos de bom tempo e só a forte vira cumulonimbo; a nuvem evapora ao se misturar com ar
+  seco; a sombra das nuvens e a chuva esfriam o chão e encerram a trovoada;
+- **sistemas de tempo** (cristas e cavados) cruzam o mundo para leste a cada dois dias de
+  jogo, mais ou menos: sob a crista o ar desce, seca e o céu abre; sob o cavado o ar sobe e
+  o tempo fica instável. Os cirros aparecem horas antes do cavado, e a pressão cai com ele;
 - o tipo de nuvem é deduzido do estado (cúmulos, estratos, nimbostratos, cumulonimbos,
   cirros, neblina).
 
@@ -272,6 +310,7 @@ src/client/java/br/climate/client/  Parte visual (só no cliente)
   ClimateHud                     painel do tempo na tela (tecla K)
   CloudField, CloudInput         animação das nuvens (crescimento, brotamento, bigorna, transparência, vento)
   CloudShapes, CloudRenderer      formas em voxel de cada tipo de nuvem e o desenho com texturas
+  FarView                        nuvens além do alcance de visão do jogo
   ClimateShowcase                comando /climavitrine
   ClimateMapScreen               tela do mapa-radar (tecla M)
   TornadoRenderer                funil do tornado (ciclo de vida) e partículas
@@ -284,7 +323,7 @@ tools/gerar_texturas_nuvens.py   gera o atlas de texturas das nuvens
 
 ## Limitações conhecidas
 
-A área simulada (cerca de 1.500 blocos de lado) acompanha o centro do grupo de jogadores.
+A área simulada (cerca de 4.600 blocos de lado) acompanha o centro do grupo de jogadores.
 Se estiverem espalhados demais, ela acompanha o primeiro jogador, e quem está muito longe
 recebe céu limpo. Ao teleportar para longe, a área leva alguns segundos para chegar.
 Se a opção de vídeo "Nuvens" estiver desligada, as nuvens simuladas também somem.

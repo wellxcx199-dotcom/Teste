@@ -2,7 +2,7 @@ package br.climate.core;
 
 public final class Demo {
     public static void main(String[] a) {
-        ClimateConfig cfg = new ClimateConfig();
+        ClimateConfig cfg = TestConfig.cells16();
         TerrainSource t = new TerrainSource() {
             public boolean isWater(int x, int z) { return x < 20; }
             public double elevationMeters(int x, int z) {

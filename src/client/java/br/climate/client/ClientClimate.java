@@ -97,7 +97,10 @@ public final class ClientClimate {
         return v < target ? Math.min(target, v + step) : Math.max(target, v - step);
     }
 
-    public static float rainLevel(float pt) { return Mth.lerp(pt, rainO, rain); }
+    /** Só para gravar demonstrações (DevScript "rain off"): esconde a chuva local. */
+    static boolean muteRain;
+
+    public static float rainLevel(float pt) { return muteRain ? 0 : Mth.lerp(pt, rainO, rain); }
 
     public static float thunderLevel(float pt) { return Mth.lerp(pt, thunderO, thunder) * rainLevel(pt); }
 

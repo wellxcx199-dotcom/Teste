@@ -18,7 +18,7 @@ class ClimateGridTest {
 
     private static ClimateGrid midLatitude() {
         // Origem em Z = -10000 blocos => latitude ~45°N, faixa dos ventos de oeste.
-        return new ClimateGrid(110, 40, 0, -625 - 20, new ClimateConfig(), RIDGE);
+        return new ClimateGrid(110, 40, 0, -625 - 20, TestConfig.cells16(), RIDGE);
     }
 
     @Test
@@ -64,7 +64,7 @@ class ClimateGridTest {
 
     @Test
     void thunderIsOnlyPartOfCumulonimbus() {
-        ClimateGrid g = new ClimateGrid(110, 40, 0, -298, new ClimateConfig(), RIDGE); // ~20°N
+        ClimateGrid g = new ClimateGrid(110, 40, 0, -298, TestConfig.cells16(), RIDGE); // ~20°N
         double h = 6 * 24;                                                              // verão boreal
         g.initialize(h);
         int cb = 0, thunder = 0;
@@ -77,6 +77,42 @@ class ClimateGridTest {
         }
         assertTrue(cb > 0, "o verão subtropical deveria gerar cumulonimbos");
         assertTrue(thunder > 0 && thunder < cb, "trovoadas " + thunder + " de " + cb + " cumulonimbos");
+    }
+
+    /**
+     * As nuvens precisam ir e vir: nenhuma região fica nublada para sempre, o céu passa boa
+     * parte do tempo limpo e os cúmulos sobre a terra são da tarde, não da madrugada.
+     */
+    @Test
+    void cloudsComeAndGo() {
+        ClimateGrid g = new ClimateGrid(110, 40, 0, -298, TestConfig.cells16(), RIDGE); // ~20°N
+        double h = 6 * 24, dt = 0.2;                                                     // verão boreal
+        g.initialize(h);
+        for (int s = 0; s < 2 * 24 * 5; s++, h += dt) g.step(dt, h);
+        int n = g.nx * g.nz, steps = 8 * 24 * 5, land = 0;
+        int[] cloudy = new int[n];
+        long clear = 0, night = 0, nightN = 0, afternoon = 0, afternoonN = 0;
+        for (int k = 0; k < n; k++) if (!g.water[k]) land++;
+        for (int s = 0; s < steps; s++, h += dt) {
+            g.step(dt, h);
+            double hour = h % 24;
+            for (int k = 0; k < n; k++) {
+                CloudType t = g.type[k];
+                if (t == CloudType.CLEAR || t == CloudType.FOG) clear++; else cloudy[k]++;
+                boolean conv = !g.water[k] && (t == CloudType.CUMULUS || t == CloudType.CUMULONIMBUS);
+                if (hour < 6) { nightN++; if (conv) night++; }
+                if (hour >= 13 && hour < 18) { afternoonN++; if (conv) afternoon++; }
+            }
+        }
+        int stuck = 0;
+        for (int k = 0; k < n; k++) if (cloudy[k] > 0.9 * steps) stuck++;
+        double clearFrac = clear / (double) ((long) steps * n);
+        double nightConv = night / (double) nightN * n / land, dayConv = afternoon / (double) afternoonN * n / land;
+        String msg = String.format("limpo %.2f, células sempre nubladas %d de %d, cúmulos de madrugada %.3f, à tarde %.3f",
+                clearFrac, stuck, n, nightConv, dayConv);
+        assertTrue(clearFrac > 0.4 && clearFrac < 0.95, msg);
+        assertTrue(stuck <= n / 50, msg);
+        assertTrue(nightConv < 0.01 && dayConv > 0.03, msg);
     }
 
     @Test
@@ -104,7 +140,7 @@ class ClimateGridTest {
 
     @Test
     void recenterKeepsOverlappingCellsAndStaysFinite() {
-        ClimateGrid g = new ClimateGrid(110, 40, 0, -298, new ClimateConfig(), RIDGE);
+        ClimateGrid g = new ClimateGrid(110, 40, 0, -298, TestConfig.cells16(), RIDGE);
         double h = 6 * 24;
         g.initialize(h);
         for (int n = 0; n < 24 * 3; n++, h++) g.step(1, h);
@@ -118,7 +154,7 @@ class ClimateGridTest {
 
     @Test
     void cloudGeometryIsConsistent() {
-        ClimateGrid g = new ClimateGrid(110, 40, 0, -298, new ClimateConfig(), RIDGE);
+        ClimateGrid g = new ClimateGrid(110, 40, 0, -298, TestConfig.cells16(), RIDGE);
         double h = 6 * 24;
         g.initialize(h);
         for (int n = 0; n < 24 * 3; n++, h++) g.step(1, h);
@@ -174,7 +210,7 @@ class ClimateGridTest {
 
     /** Vento médio (u leste, v norte) numa grade de oceano centrada na latitude dada. */
     private static double[] meanOceanWind(double latDeg) {
-        ClimateConfig cfg = new ClimateConfig();
+        ClimateConfig cfg = TestConfig.cells16();
         int oz = (int) Math.round(-latDeg / 90 * cfg.halfRangeBlocks / cfg.cellBlocks) - 5;
         ClimateGrid g = new ClimateGrid(10, 10, 0, oz, cfg, OCEAN);
         double h = 0;
@@ -201,7 +237,7 @@ class ClimateGridTest {
             public double elevationMeters(int x, int z) { return isWater(x, z) ? 0 : 100; }
             public double wetness(int x, int z) { return 0.5; }
         };
-        ClimateGrid g = new ClimateGrid(80, 20, 0, -100, new ClimateConfig(), lakes);
+        ClimateGrid g = new ClimateGrid(80, 20, 0, -100, TestConfig.cells16(), lakes);
         int far = 10 * 80 + 75;                       // 65 células do mar, cercada de lagoas
         assertTrue(g.cont[far] > 0.9, "continentalidade longe do mar: " + g.cont[far]);
     }
@@ -214,7 +250,7 @@ class ClimateGridTest {
             public double elevationMeters(int x, int z) { return x < 40 ? 0 : 50; }
             public double wetness(int x, int z) { return 0.3; }
         };
-        ClimateGrid g = new ClimateGrid(80, 10, 0, -5, new ClimateConfig(), coast);
+        ClimateGrid g = new ClimateGrid(80, 10, 0, -5, TestConfig.cells16(), coast);
         double h = 0;
         g.initialize(h);
         int shore = 5 * 80 + 42;

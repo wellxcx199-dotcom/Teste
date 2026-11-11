@@ -43,8 +43,8 @@ final class LightningFx {
 
     /** Chance por tick de uma descarga numa tempestade totalmente madura. */
     private static final float RATE = 0.012f;
-    /** Até onde as descargas são simuladas (blocos). */
-    private static final double RANGE = 420;
+    /** Até onde as descargas são simuladas, em células de nuvem. */
+    private static final double RANGE_CELLS = 19;
 
     private static float flash, flashO;
     /** Retornos ainda por vir da última descarga (ticks até o próximo e quantos faltam). */
@@ -74,19 +74,22 @@ final class LightningFx {
         if (level == null || player == null || level.dimension() != Level.OVERWORLD || !ClientClimate.cloudsActive()) return;
         double[] off = CloudField.offset(0);
         RandomSource rnd = level.getRandom();
+        int cell = ClientClimate.cloudSource() != null ? ClientClimate.cloudSource().cellBlocks() : 48;
+        double range = RANGE_CELLS * cell;
+        float size = cell / 16f;                       // os raios acompanham a escala das nuvens
         for (double[] st : CloudShapes.matureStorms) {
             float mature = (float) st[5];
             if (mature < 0.35f) continue;
             double x = st[0] + off[0], z = st[1] + off[1];
             double dist = Math.hypot(x - player.getX(), z - player.getZ());
-            if (dist > RANGE || rnd.nextFloat() > RATE * mature) continue;
-            float near = (float) (1 - dist / RANGE);
+            if (dist > range || rnd.nextFloat() > RATE * mature) continue;
+            float near = (float) (1 - dist / range);
             if (rnd.nextFloat() < 0.7f) {
                 // Dentro da nuvem: acende a nuvem, pisca algumas vezes e ronca baixo, de longe.
                 strike(0.25f + 0.55f * near, rnd);
-                if (dist < 250) level.setSkyFlashTime(2);
+                if (dist < 0.4 * range) level.setSkyFlashTime(2);
                 level.playLocalSound(x, st[3], z, SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER,
-                        14f, 0.5f + 0.2f * rnd.nextFloat(), true);
+                        14f * size, 0.5f + 0.2f * rnd.nextFloat(), true);
             } else {
                 // Da nuvem ao chão, sob a torre (onde chove).
                 double a = rnd.nextDouble() * Math.PI * 2, r = st[4] * 0.8 * Math.sqrt(rnd.nextDouble());
@@ -95,11 +98,11 @@ final class LightningFx {
                 if (!level.getChunkSource().hasChunk(cx, cz)) continue;
                 int gy = level.getHeight(Heightmap.Types.MOTION_BLOCKING, Mth.floor(bx), Mth.floor(bz));
                 if (gy >= st[2] - 4) continue;
-                bolts.add(new Bolt(channel(bx, st[2] + 2, bz, gy, rnd), level.getGameTime(), rnd.nextInt(16)));
+                bolts.add(new Bolt(channel(bx, st[2] + 2, bz, gy, size, rnd), level.getGameTime(), rnd.nextInt(16)));
                 strike(0.35f + 0.6f * near, rnd);
-                if (dist < 300) level.setSkyFlashTime(2);
+                if (dist < 0.5 * range) level.setSkyFlashTime(2);
                 level.playLocalSound(bx, gy, bz, SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER,
-                        30f, 0.8f + 0.2f * rnd.nextFloat(), true);
+                        25f * size, 0.8f + 0.2f * rnd.nextFloat(), true);
             }
         }
     }
@@ -108,26 +111,27 @@ final class LightningFx {
      * Canal do raio: desce da base da nuvem em passos de 3 a 5 blocos, desviando para os lados,
      * com ramificações mais finas que se abrem para baixo e morrem no ar.
      */
-    private static List<float[]> channel(double x, double top, double z, double ground, RandomSource rnd) {
+    private static List<float[]> channel(double x, double top, double z, double ground, float s, RandomSource rnd) {
         List<float[]> segs = new ArrayList<>();
         double y = top;
+        float w = 0.45f * s;
         while (y > ground) {
-            double ny = Math.max(ground, y - 3 - 2 * rnd.nextDouble());
-            double nx = x + (rnd.nextDouble() - 0.5) * 5, nz = z + (rnd.nextDouble() - 0.5) * 5;
-            segs.add(new float[] {(float) x, (float) y, (float) z, (float) nx, (float) ny, (float) nz, 0.55f});
-            if (rnd.nextFloat() < 0.22f && y - ground > 12) branch(segs, nx, ny, nz, ground, rnd);
+            double ny = Math.max(ground, y - (3 + 2 * rnd.nextDouble()) * s);
+            double nx = x + (rnd.nextDouble() - 0.5) * 5 * s, nz = z + (rnd.nextDouble() - 0.5) * 5 * s;
+            segs.add(new float[] {(float) x, (float) y, (float) z, (float) nx, (float) ny, (float) nz, w});
+            if (rnd.nextFloat() < 0.22f && y - ground > 12 * s) branch(segs, nx, ny, nz, ground, s, rnd);
             x = nx; y = ny; z = nz;
         }
         return segs;
     }
 
-    private static void branch(List<float[]> segs, double x, double y, double z, double ground, RandomSource rnd) {
+    private static void branch(List<float[]> segs, double x, double y, double z, double ground, float s, RandomSource rnd) {
         double dx = rnd.nextDouble() - 0.5, dz = rnd.nextDouble() - 0.5;
         int n = 3 + rnd.nextInt(6);
-        for (int i = 0; i < n && y > ground + 4; i++) {
-            double ny = y - 2 - 2 * rnd.nextDouble();
-            double nx = x + dx * 6 + (rnd.nextDouble() - 0.5) * 3, nz = z + dz * 6 + (rnd.nextDouble() - 0.5) * 3;
-            segs.add(new float[] {(float) x, (float) y, (float) z, (float) nx, (float) ny, (float) nz, 0.3f * (1 - i / (float) n)});
+        for (int i = 0; i < n && y > ground + 4 * s; i++) {
+            double ny = y - (2 + 2 * rnd.nextDouble()) * s;
+            double nx = x + (dx * 6 + (rnd.nextDouble() - 0.5) * 3) * s, nz = z + (dz * 6 + (rnd.nextDouble() - 0.5) * 3) * s;
+            segs.add(new float[] {(float) x, (float) y, (float) z, (float) nx, (float) ny, (float) nz, 0.25f * s * (1 - i / (float) n)});
             x = nx; y = ny; z = nz;
         }
     }
@@ -174,6 +178,9 @@ final class LightningFx {
     private static void quad(BufferBuilder bb, Vec3 cam, float[] s, float w, float r, float g, float b, float a) {
         Vector3f p0 = new Vector3f((float) (s[0] - cam.x), (float) (s[1] - cam.y), (float) (s[2] - cam.z));
         Vector3f p1 = new Vector3f((float) (s[3] - cam.x), (float) (s[4] - cam.y), (float) (s[5] - cam.z));
+        // Raios distantes entram no alcance de visão junto com as nuvens (FarView).
+        float k0 = FarView.scale(p0.x, p0.y, p0.z), k1 = FarView.scale(p1.x, p1.y, p1.z);
+        p0.mul(k0); p1.mul(k1); w *= 0.5f * (k0 + k1);
         Vector3f dir = new Vector3f(p1).sub(p0);
         Vector3f view = new Vector3f(p0).add(p1).mul(0.5f);
         Vector3f side = dir.cross(view, new Vector3f());

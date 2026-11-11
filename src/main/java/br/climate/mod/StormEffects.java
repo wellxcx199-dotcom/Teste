@@ -21,14 +21,14 @@ import net.minecraft.world.phys.Vec3;
  * ventos de furacão empurram jogadores que estão a céu aberto.
  *
  * Escala: um bloco vale 500 m na horizontal, então um tornado real (50 a 500 m) caberia
- * num bloco só. Para ser visível e jogável, o funil tem alguns blocos de raio, crescendo
- * com a categoria EF; a mesma regra é usada no desenho do cliente (TornadoRenderer).
+ * num bloco só. Para ser visível e jogável, o funil tem de 5 (EF0) a 17 blocos (EF5) de raio;
+ * a mesma regra é usada no desenho do cliente (TornadoRenderer).
  */
 final class StormEffects {
     private StormEffects() {}
 
     /** Raio visual/de efeito do funil, em blocos, pela categoria EF. */
-    static double funnelRadius(int ef) { return 2.5 + 1.2 * ef; }
+    static double funnelRadius(int ef) { return 5 + 2.4 * ef; }
 
     static void tick(ServerLevel level, ClimateGrid grid, ClimateConfig cfg, ClimateSettings.Mod opt) {
         if (grid == null) return;
@@ -52,7 +52,7 @@ final class StormEffects {
 
         if (opt.tornadoPushesEntities) {
             double reach = r * 3;
-            AABB box = new AABB(x - reach, ground - 4, z - reach, x + reach, ground + 60, z + reach);
+            AABB box = new AABB(x - reach, ground - 4, z - reach, x + reach, ground + 120, z + reach);
             for (Entity e : level.getEntitiesOfClass(Entity.class, box, Entity::isPushable)) {
                 if (e instanceof ServerPlayer p && (p.isCreative() || p.isSpectator())) continue;
                 pull(e, x, z, ground, r, reach, strength);
@@ -64,14 +64,14 @@ final class StormEffects {
 
         if (opt.tornadoBreaksBlocks && time % 3 == 0) {
             RandomSource rnd = level.getRandom();
-            int tries = 3 + t.category() * 2;
+            int tries = 8 + t.category() * 5;
             for (int i = 0; i < tries; i++) {
                 double a = rnd.nextDouble() * Math.PI * 2, d = Math.sqrt(rnd.nextDouble()) * r * 1.6;
                 int bx = (int) Math.floor(x + Math.cos(a) * d), bz = (int) Math.floor(z + Math.sin(a) * d);
                 if (!level.hasChunkAt(new BlockPos(bx, 0, bz))) continue;   // não força carregar chunks
                 BlockPos top = level.getHeightmapPos(Heightmap.Types.WORLD_SURFACE, new BlockPos(bx, 0, bz)).below();
                 for (BlockPos pos : new BlockPos[] {top, top.above()}) {
-                    if (pos.getY() > ground + 40) continue;
+                    if (pos.getY() > ground + 80) continue;
                     BlockState st = level.getBlockState(pos);
                     if (fragile(st)) { level.destroyBlock(pos, false); break; }
                 }
@@ -87,7 +87,7 @@ final class StormEffects {
         double near = 1 - d / reach;                               // 0 na borda, 1 no centro
         double inward = 0.06 * strength * near, swirl = 0.18 * strength * near;
         double lift = d < r * 1.3 ? 0.11 * strength * (1 - d / (r * 1.3)) + 0.02 : 0.02 * near;
-        if (e.getY() > ground + 30) lift = -0.02;                  // lá em cima, é arremessado para fora
+        if (e.getY() > ground + 60) lift = -0.02;                  // lá em cima, é arremessado para fora
         Vec3 push = new Vec3(dx / d * inward - dz / d * swirl, lift, dz / d * inward + dx / d * swirl);
         e.push(push.x, push.y, push.z);
         e.hurtMarked = true;                                       // sincroniza a velocidade com o cliente

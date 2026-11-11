@@ -195,12 +195,13 @@ public final class ClimateMod implements ModInitializer {
         ServerPlayer p = climatePlayer(ctx);
         if (p == null) return 0;
         Storm s;
+        double sc16 = cfg.cellBlocks / 16.0;                    // as distâncias acompanham a escala das nuvens
         switch (kind) {
-            case HURRICANE -> s = grid.storms.spawnHurricane(p.getX() + 600, p.getZ(), 50);       // a leste: os alísios o trazem
+            case HURRICANE -> s = grid.storms.spawnHurricane(p.getX() + 500 * sc16, p.getZ(), 50); // a leste: os alísios o trazem
             // Os criados por comando duram mais que os naturais, para dar tempo de observar.
-            case SUPERCELL -> s = grid.storms.spawnSupercell(p.getX(), p.getZ() - 120, 6);
+            case SUPERCELL -> s = grid.storms.spawnSupercell(p.getX(), p.getZ() - 120 * sc16, 6);
             default -> {
-                Storm sc = grid.storms.spawnSupercell(p.getX(), p.getZ() - 90, 6);
+                Storm sc = grid.storms.spawnSupercell(p.getX(), p.getZ() - 90 * sc16, 6);
                 sc.ageH = sc.lifeH * 0.4;                                                          // já madura
                 s = grid.storms.spawnTornado(sc, 2, 3.0, cfg.cellBlocks);
             }
@@ -248,7 +249,11 @@ public final class ClimateMod implements ModInitializer {
         grid = data.restore(n, n, cfg, terrain, gameHours(level));
         if (grid == null) {
             grid = new ClimateGrid(n, n, pendingOrigin[0], pendingOrigin[1], cfg, terrain);
-            grid.initialize(gameHours(level));
+            // Parte do equilíbrio um dia antes e simula até agora: o ajuste inicial (umidade em
+            // excesso condensando de uma vez) acontece antes de o jogador ver o céu.
+            double now = gameHours(level), dt = opt.stepTicks / 1000.0;
+            grid.initialize(now - 24);
+            for (double h = now - 24 + dt; h <= now; h += dt) grid.step(dt, h);
             LOG.info("Clima iniciado do equilíbrio, janela centrada no spawn.");
         } else {
             LOG.info("Clima restaurado do mundo salvo (origem da janela: célula {}, {}).",
@@ -415,7 +420,10 @@ public final class ClimateMod implements ModInitializer {
                 CloudType t = grid.type[k] == null ? CloudType.CLEAR : grid.type[k];
                 types[idx] = (byte) t.ordinal();
                 cover[idx] = (byte) Math.round(grid.coverage(k) * 255);
-                base[idx] = toBlockY(grid.cloudBaseMeters(k), sea);
+                // Cirros ficam na altura das bigornas: usam a escala de espessura das nuvens, não a do relevo.
+                base[idx] = t == CloudType.CIRRUS
+                        ? (short) Math.min(480, sea + Math.round(8000 / opt.cloudThicknessMetersPerBlock))
+                        : toBlockY(grid.cloudBaseMeters(k), sea);
                 double thickness = (grid.cloudTopMeters(k) - grid.cloudBaseMeters(k)) / opt.cloudThicknessMetersPerBlock;
                 top[idx] = (short) (base[idx] + Math.max(2, Math.round(thickness)));
             }

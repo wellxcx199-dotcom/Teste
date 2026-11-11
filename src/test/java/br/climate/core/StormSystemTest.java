@@ -29,7 +29,7 @@ class StormSystemTest {
 
     @Test
     void hurricaneHasEyeEyewallLowPressureAndCyclonicWinds() {
-        ClimateConfig cfg = new ClimateConfig();
+        ClimateConfig cfg = TestConfig.cells16();
         cfg.hurricanesPerDay = 0;
         ClimateGrid g = tropical(OCEAN, cfg);
         double h = summer();
@@ -52,7 +52,7 @@ class StormSystemTest {
 
     @Test
     void hurricaneIntensifiesOverWarmSeaAndMovesWest() {
-        ClimateConfig cfg = new ClimateConfig();
+        ClimateConfig cfg = TestConfig.cells16();
         cfg.hurricanesPerDay = 0;
         ClimateGrid g = tropical(OCEAN, cfg);
         double h = summer();
@@ -72,7 +72,7 @@ class StormSystemTest {
 
     @Test
     void hurricaneWeakensOverLand() {
-        ClimateConfig cfg = new ClimateConfig();
+        ClimateConfig cfg = TestConfig.cells16();
         cfg.hurricanesPerDay = 0;
         ClimateGrid g = tropical(LAND, cfg);
         double h = summer();
@@ -84,7 +84,7 @@ class StormSystemTest {
 
     @Test
     void hurricanesFormNaturallyOverWarmOcean() {
-        ClimateConfig cfg = new ClimateConfig();
+        ClimateConfig cfg = TestConfig.cells16();
         cfg.hurricanesPerDay = 6;                 // frequência alta só para o teste ser rápido
         ClimateGrid g = tropical(OCEAN, cfg);
         double h = summer();
@@ -99,7 +99,7 @@ class StormSystemTest {
 
     @Test
     void supercellSpawnsTornadoThatFollowsItAndDies() {
-        ClimateConfig cfg = new ClimateConfig();
+        ClimateConfig cfg = TestConfig.cells16();
         cfg.tornadoPerHour = 50;                  // garante o tornado no teste
         cfg.supercellsPerHour = 0;
         ClimateGrid g = tropical(LAND, cfg);
@@ -121,7 +121,7 @@ class StormSystemTest {
 
     @Test
     void stormsSurviveSaveAndForecastDoesNotTouchThem() {
-        ClimateConfig cfg = new ClimateConfig();
+        ClimateConfig cfg = TestConfig.cells16();
         cfg.hurricanesPerDay = 0;
         ClimateGrid g = tropical(OCEAN, cfg);
         g.initialize(summer());

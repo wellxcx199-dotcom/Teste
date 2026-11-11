@@ -48,7 +48,10 @@ final class ClimateShowcase {
 
     /** Recorte da vitrine centrado no jogador; com clouds = false, o mesmo recorte de céu limpo. */
     static ClimatePayload build(LocalPlayer player, boolean clouds) {
-        int cb = 16, size = 2 * RADIUS + 1, n = size * size;
+        // Mesma célula das nuvens simuladas, para a vitrine ter a escala do mundo.
+        ClimatePayload live = ClientClimate.latest();
+        int cb = live != null ? live.cellBlocks() : 48, size = 2 * RADIUS + 1, n = size * size;
+        float sc = cb / 16f;
         int pcx = Math.floorDiv(player.getBlockX(), cb), pcz = Math.floorDiv(player.getBlockZ(), cb);
         int ocx = pcx - RADIUS, ocz = pcz - RADIUS;
         byte[] types = new byte[n], cover = new byte[n];
@@ -72,8 +75,8 @@ final class ClimateShowcase {
                     int idx = (cj + dj) * size + ci + di;
                     types[idx] = (byte) t.ordinal();
                     cover[idx] = (byte) 220;
-                    base[idx] = (short) (y + b);
-                    top[idx] = (short) (y + b + h);
+                    base[idx] = (short) (y + Math.round(b * sc));
+                    top[idx] = (short) (y + Math.round((b + h) * sc));
                 }
         }
         // Linha de instabilidade levemente inclinada (sudoeste → nordeste).
@@ -81,8 +84,8 @@ final class ClimateShowcase {
             int idx = (RADIUS - LINE_NORTH - Math.floorDiv(d, 3)) * size + RADIUS + d;
             types[idx] = (byte) CloudType.CUMULONIMBUS.ordinal();
             cover[idx] = (byte) 230;
-            base[idx] = (short) (y + 42);
-            top[idx] = (short) (y + 42 + 92);
+            base[idx] = (short) (y + Math.round(42 * sc));
+            top[idx] = (short) (y + Math.round((42 + 92) * sc));
         }
         ClimatePayload real = ClientClimate.latest();
         return new ClimatePayload(real != null ? real.tempC() : 20, y, 0.0975f, real != null ? real.humidity() : 0.6f,
