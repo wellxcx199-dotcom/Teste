@@ -1,0 +1,11 @@
+## Interface: 30300
+## Title: |cff33ff99LucroCraft|r
+## Notes: Cruza os precos da Casa de Leiloes com as suas profissoes e mostra os crafts mais lucrativos.
+## Author: LucroCraft
+## Version: 1.0.0
+## SavedVariables: LucroCraftDB
+
+Core.lua
+Analysis.lua
+Scanner.lua
+UI.lua
